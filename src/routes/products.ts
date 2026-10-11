@@ -7,6 +7,7 @@ import { getDb } from "../db/index";
 import {
   cartItems,
   categories,
+  orderItems,
   productImages,
   productTags,
   productVariants,
@@ -220,9 +221,11 @@ productRoutes.delete("/:id", requireAuth, requireAdmin, async (c) => {
   const db = getDb(c.env.DB);
   const id = c.req.param("id");
   // D1 does not enforce FK cascades — clean children explicitly.
+  // Order history is kept: order_items.productId is nulled (names/prices stay).
   const variants = await db.select().from(productVariants).where(eq(productVariants.productId, id));
   const variantIds = variants.map((v) => v.id);
   await db.batch([
+    db.update(orderItems).set({ productId: null }).where(eq(orderItems.productId, id)),
     ...(variantIds.length
       ? [db.delete(cartItems).where(inArray(cartItems.variantId, variantIds))]
       : []),
