@@ -34,6 +34,7 @@ Errors: `{ "error": "<message>", "status": <code> }`.
 - Variants (admin): `POST /api/products/:id/variants { name, sku?, priceCents? (null = base price), stock?, isActive?, position? }`, `PUT /:id/variants/:vid` (partial), `DELETE /:id/variants/:vid` (removes cart lines; order history kept)
 - `POST /api/products/:id/images` (admin) `{ publicId, secureUrl, width?, height?, position? }` — attach after Cloudinary upload
 - `DELETE /api/products/:id/images/:imageId` (admin) — removes DB row only (see CLOUDINARY.md)
+- `PATCH /api/products/:id/images/:imageId` (admin) `{ position }` — reorder gallery (0 = cover = card thumbnail)
 
 Rule: when a product has active variants, cart/checkout require `variantId`; variant price overrides base, stock is per-variant.
 

@@ -272,6 +272,42 @@ productRoutes.delete("/:id/images/:imageId", requireAuth, requireAdmin, async (c
   return c.json({ ok: true });
 });
 
+const imageUpdateSchema = z.object({
+  position: z.number().int().min(0).max(1000),
+});
+
+/** Reorder gallery images (position 0 = cover). Used by admin arrows/star. */
+productRoutes.patch(
+  "/:id/images/:imageId",
+  requireAuth,
+  requireAdmin,
+  zValidator("json", imageUpdateSchema),
+  async (c) => {
+    const db = getDb(c.env.DB);
+    const rows = await db
+      .select()
+      .from(productImages)
+      .where(
+        and(
+          eq(productImages.id, c.req.param("imageId")),
+          eq(productImages.productId, c.req.param("id")),
+        ),
+      )
+      .limit(1);
+    if (!rows[0]) throw new HTTPException(404, { message: "Image not found" });
+    await db
+      .update(productImages)
+      .set({ position: c.req.valid("json").position })
+      .where(eq(productImages.id, rows[0].id));
+    const updated = await db
+      .select()
+      .from(productImages)
+      .where(eq(productImages.id, rows[0].id))
+      .limit(1);
+    return c.json({ image: updated[0] });
+  },
+);
+
 /* ---------------- variants (admin) ---------------- */
 
 productRoutes.post(
