@@ -26,6 +26,7 @@ Health: `GET /health` · Route index: `GET /api/docs`
 | `docs/CLOUDINARY.md` | Signed upload flow + JS snippet, delete caveat |
 | `docs/D1.md` | Setup, local vs remote, useful commands, limits |
 | `docs/NEXT_STEPS.md` | Payments (Stripe/SSLCommerz), admin UI plan, hardening |
+| `docs/FORK_SETUP.md` | Run your own copy: D1+KV+secrets checklist, every value to change |
 
 ## Key choices
 
