@@ -10,7 +10,7 @@
     "CLOUDINARY_FOLDER": "mike/products",
     "ALLOWED_ORIGINS": "https://mike-storefront.vercel.app/",
     "FRONTEND_URL": "https://mike-storefront.vercel.app",
-    "TELEGRAM_CHAT_ID": ""
+    "TELEGRAM_CHAT_ID": "8937043719"
   },
   "kv_namespaces": [
     {
