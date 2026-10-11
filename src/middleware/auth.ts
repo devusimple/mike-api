@@ -10,6 +10,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role: Role;
+  emailVerified: boolean;
 }
 
 declare module "hono" {
@@ -42,6 +43,7 @@ export const requireAuth = createMiddleware<Env>(async (c, next) => {
     email: user.email,
     name: user.name,
     role: user.role as Role,
+    emailVerified: !!user.emailVerified,
   });
   await next();
 });
@@ -79,5 +81,5 @@ export async function getOptionalUser(
   const rows = await db.select().from(users).where(eq(users.id, claims.sub)).limit(1);
   const user = rows[0];
   if (!user) throw new HTTPException(401, { message: "User no longer exists" });
-  return { id: user.id, email: user.email, name: user.name, role: user.role as Role };
+  return { id: user.id, email: user.email, name: user.name, role: user.role as Role, emailVerified: !!user.emailVerified };
 }

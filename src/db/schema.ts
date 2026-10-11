@@ -12,6 +12,9 @@ export const users = sqliteTable(
     role: text("role", { enum: ["customer", "admin"] })
       .notNull()
       .default("customer"),
+    emailVerified: integer("email_verified", { mode: "boolean" })
+      .notNull()
+      .default(false),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -262,3 +265,25 @@ export const refreshTokens = sqliteTable("refresh_tokens", {
   expiresAt: text("expires_at").notNull(),
   revoked: integer("revoked", { mode: "boolean" }).notNull().default(false),
 });
+
+/**
+ * Single-use email tokens (email verification + password reset).
+ * Only sha256 hashes are stored — raw tokens travel by email link only.
+ */
+export const authTokens = sqliteTable(
+  "auth_tokens",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    purpose: text("purpose", { enum: ["verify_email", "reset_password"] }).notNull(),
+    expiresAt: text("expires_at").notNull(),
+    used: integer("used", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [index("auth_tokens_user_idx").on(t.userId)],
+);

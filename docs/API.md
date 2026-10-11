@@ -10,11 +10,16 @@ Errors: `{ "error": "<message>", "status": <code> }`.
 
 | Method | Endpoint | Auth | Body |
 |---|---|---|---|
-| POST | `/api/auth/register` | – | `{ email, password≥8, name }` → 201 `{ user, accessToken, refreshToken }` + `refresh_token` cookie |
-| POST | `/api/auth/login` | – | `{ email, password }` → same as above |
-| POST | `/api/auth/refresh` | – | `{ refreshToken }` (or cookie) → rotates, returns new pair |
+| POST | `/api/auth/register` | – | `{ email, password≥8, name }` → 201 `{ user, accessToken, refreshToken }` + `refresh_token` cookie + verification email (best-effort) |
+| POST | `/api/auth/login` | – | `{ email, password }` → same as above (10/min/IP) |
+| POST | `/api/auth/refresh` | – | `{ refreshToken }` (or cookie) → rotates, returns new pair; unknown-token reuse revokes all sessions |
 | POST | `/api/auth/logout` | – | `{ refreshToken }` → revokes |
-| GET | `/api/auth/me` | Bearer | → `{ user }` |
+| GET | `/api/auth/me` | Bearer | → `{ user }` (includes `emailVerified`) |
+| POST | `/api/auth/request-verification` | Bearer | re-sends verification email |
+| POST | `/api/auth/verify-email` | – | `{ token }` → marks email verified |
+| POST | `/api/auth/forgot-password` | – | `{ email }` → always 200, sends reset link if account exists |
+| POST | `/api/auth/reset-password` | – | `{ token, password≥8 }` → resets + logs out everywhere |
+| POST | `/api/auth/change-password` | Bearer | `{ currentPassword, newPassword≥8 }` → returns fresh pair, revokes other sessions |
 
 ## Categories
 

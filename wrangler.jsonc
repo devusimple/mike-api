@@ -8,8 +8,15 @@
     "CLOUDINARY_CLOUD_NAME": "dxat06es",
     "CLOUDINARY_API_KEY": "424442886499234",
     "CLOUDINARY_FOLDER": "mike/products",
-    "ALLOWED_ORIGINS": "https://mike-storefront.vercel.app/"
+    "ALLOWED_ORIGINS": "https://mike-storefront.vercel.app/",
+    "FRONTEND_URL": "https://mike-storefront.vercel.app"
   },
+  "kv_namespaces": [
+    {
+      "binding": "RATE_LIMIT_KV",
+      "id": "cd4a229a1e5640d580dc0682f75b82a1"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

@@ -2,6 +2,7 @@
 // Run `bun run cf-typegen` to regenerate after changing wrangler.jsonc.
 interface CloudflareBindings {
   DB: D1Database;
+  RATE_LIMIT_KV: KVNamespace;
   JWT_SECRET: string;
   CLOUDINARY_CLOUD_NAME: string;
   CLOUDINARY_API_KEY: string;
@@ -9,4 +10,10 @@ interface CloudflareBindings {
   CLOUDINARY_FOLDER?: string;
   /** Comma-separated browser origins, e.g. "https://shop.com,https://admin.shop.com". */
   ALLOWED_ORIGINS?: string;
+  /** Public site URL used in email links. */
+  FRONTEND_URL?: string;
+  /** Resend API key (optional — without it, emails only log in dev). */
+  RESEND_API_KEY?: string;
+  /** Verified sender, e.g. "Mike Shop <hello@shop.com>". */
+  MAIL_FROM?: string;
 }

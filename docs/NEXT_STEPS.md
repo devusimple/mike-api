@@ -20,7 +20,7 @@ Build against: `GET /api/orders?all=1`, `PATCH /api/orders/:id/status`, product/
 ## 4. Hardening before launch
 
 - Set `ALLOWED_ORIGINS` in `wrangler.jsonc` to your shop + admin domains (localhost is always allowed for dev).
-- Rate-limit login/refresh (KV or Durable Objects).
+- Rate-limit login/refresh (KV or Durable Objects) — done via `RATE_LIMIT_KV`.
 - Known D1 limit: truly-parallel writes (e.g. 5 logins in the same millisecond from different tabs) can hit single-writer contention and 500 once; sequential retries succeed. Double-submits are safe. If this ever matters, add one retry on `SQLITE_BUSY` in the write paths.
 - `DELETE /api/uploads/:publicId` proxy (Admin API destroy) so image delete frees storage.
 - Audit log table (`admin_actions`), Sentry/workers observability, `bun run cf-typegen` in CI.
