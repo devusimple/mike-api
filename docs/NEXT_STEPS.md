@@ -6,9 +6,9 @@
 - **Bangladesh (SSLCommerz/bKash):** same shape — `POST /api/payments/init` returns gateway URL, gateway callback hits `/api/payments/callback` → verify → mark `paid`. COD stays default until then.
 - Until then: manual bKash number in checkout response + admin marks `paid`.
 
-## 2. Admin UI (no UI in v1 — APIs are ready)
+## 2. Admin UI — done as `mike-dashboard` (Next.js + shadcn, separate app)
 
-Build against: `GET /api/orders?all=1`, `PATCH /api/orders/:id/status`, product/category CRUD, `GET/POST/DELETE /api/coupons`, `GET /api/uploads/config` + signature flow. Suggested pages: login (`/auth/login` + `/me`), product table (image attach via Cloudinary widget), order board (pending→shipped), coupon list, low-stock (`stock<5`) via `GET /api/products?all=1`.
+Implemented: admin login (role-gated), overview (counts, revenue, low-stock), product table + dialog CRUD with Cloudinary image upload/cover/reorder + variant manager, categories, order board with status updates + item breakdown, coupons, shipping zones.
 
 ## 3. Storefront upgrades
 
