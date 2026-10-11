@@ -5,7 +5,7 @@ import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db/index";
 import { cartItems, carts, coupons, orderItems, orders, productVariants, products, shippingZones } from "../db/schema";
-import { unitPriceFor } from "../lib/catalog";
+import { unitPriceFor, variantLabel } from "../lib/catalog";
 import { sendOrderAlert } from "../lib/notify";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 
@@ -65,7 +65,7 @@ orderRoutes.post("/checkout", requireAuth, zValidator("json", checkoutSchema), a
     }
     const stock = variant ? variant.stock : p.stock;
     if (stock < line.qty) {
-      const label = variant ? `${p.name} (${variant.name})` : p.name;
+      const label = variant ? `${p.name} (${variantLabel(variant)})` : p.name;
       throw new HTTPException(400, { message: `Insufficient stock for ${label} (${stock} left)` });
     }
     const unit = unitPriceFor(p, variant);
@@ -124,7 +124,7 @@ orderRoutes.post("/checkout", requireAuth, zValidator("json", checkoutSchema), a
         productId: s.product.id,
         productName: s.product.name,
         variantId: s.variant?.id ?? null,
-        variantName: s.variant?.name ?? null,
+        variantName: s.variant ? variantLabel(s.variant) : null,
         qty: s.qty,
         unitPriceCents: s.unit,
       }),

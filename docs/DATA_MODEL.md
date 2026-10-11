@@ -20,7 +20,7 @@ coupons (code PK, percent_off, active, expires_at)
 | `users` | `email UNIQUE`, `role customer\|admin` | Password hash is PBKDF2 string, never raw |
 | `categories` | `name/slug UNIQUE` | Delete blocked while products reference it |
 | `products` | `slug/sku UNIQUE`, `price_cents`, `stock`, `category_id FK`, `is_active`, `brand`, `featured`, `rating_avg/count` (denormalized) | `compare_price_cents` = strikethrough MRP; `stock` used only when the product has no variants |
-| `product_variants` | `product_id FK`, `name` ("Black / L"), `sku UNIQUE`, `price_cents` nullable (= base price), `stock`, `is_active` | Cart/checkout require a variant when actives exist; deletion removes cart lines, keeps order history |
+| `product_variants` | `product_id FK`, `name` ("Size") + `value` ("L"), `sku UNIQUE`, `price_cents` nullable (= base price), `stock`, `is_active` | Displayed as value ?? name; cart/checkout require a variant when actives exist; deletion removes cart lines, keeps order history |
 | `tags` / `product_tags` | `UNIQUE(name)`, `UNIQUE(product_id, tag_id)` | Faceted filtering; `PUT product {tags}` replaces all links |
 | `product_images` | `product_id → products ON DELETE CASCADE` | Stores `cloudinary_public_id` + `secure_url` + dims |
 | `carts` / `cart_items` | `user_id` nullable (guest) or `guest_token` (secret uuid), `UNIQUE(cart_id, product_id, variant_id)` | One user cart (created at register) or one guest cart (`POST /cart/guest`); merged on login, quantities summed per (product, variant) |

@@ -36,9 +36,11 @@ Errors: `{ "error": "<message>", "status": <code> }`.
 - `POST /api/products` (admin) `{ name, slug?, description?, priceCents, comparePriceCents?, sku?, stock?, categoryId?, isActive?, brand?, featured?, tags?: ["cotton"] }`
 - `PUT /api/products/:id` (admin, partial; `tags` replaces all links)
 - `DELETE /api/products/:id` (admin; explicitly cleans images, variants, tag links, reviews, cart lines — D1 doesn't enforce cascades)
-- Variants (admin): `POST /api/products/:id/variants { name, sku?, priceCents? (null = base price), stock?, isActive?, position? }`, `PUT /:id/variants/:vid` (partial), `DELETE /:id/variants/:vid` (removes cart lines; order history kept)
+- Variants (admin): `POST /api/products/:id/variants { name, value?, sku?, priceCents? (null = base price), stock?, isActive?, position? }`, `PUT /:id/variants/:vid` (partial), `DELETE /:id/variants/:vid` (removes cart lines; order history kept)
 - `POST /api/products/:id/images` (admin) `{ publicId, secureUrl, width?, height?, position? }` — attach after Cloudinary upload
 - `DELETE /api/products/:id/images/:imageId` (admin) — removes DB row only (see CLOUDINARY.md)
+- `POST /api/products/:id/thumbnail { publicId, secureUrl }` (admin) — dedicated cover (cards + gallery default; falls back to first gallery image)
+- `DELETE /api/products/:id/thumbnail` (admin) — removes cover; `PUT /api/products/:id { thumbnail: {...}|null }` also works
 - `PATCH /api/products/:id/images/:imageId` (admin) `{ position }` — reorder gallery (0 = cover = card thumbnail)
 
 Rule: when a product has active variants, cart/checkout require `variantId`; variant price overrides base, stock is per-variant.

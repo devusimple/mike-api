@@ -28,6 +28,11 @@ type Env = { Bindings: CloudflareBindings };
 type Db = ReturnType<typeof getDb>;
 export const productRoutes = new Hono<Env>();
 
+const thumbnailSchema = z.object({
+  publicId: z.string().min(1).max(300),
+  secureUrl: z.url().max(500),
+});
+
 const createSchema = z.object({
   name: z.string().min(1).max(200),
   slug: z.string().min(1).max(200).optional(),
@@ -41,6 +46,7 @@ const createSchema = z.object({
   brand: z.string().max(100).optional(),
   featured: z.boolean().optional().default(false),
   tags: z.array(z.string().max(50)).max(20).optional().default([]),
+  thumbnail: thumbnailSchema.nullable().optional(),
 });
 const updateSchema = createSchema.partial();
 
@@ -54,6 +60,7 @@ const imageSchema = z.object({
 
 const variantSchema = z.object({
   name: z.string().min(1).max(100),
+  value: z.string().max(100).optional(),
   sku: z.string().max(100).optional(),
   priceCents: z.number().int().min(0).nullable().optional(),
   stock: z.number().int().min(0).default(0),
@@ -178,6 +185,8 @@ productRoutes.post("/", requireAuth, requireAdmin, zValidator("json", createSche
       isActive: input.isActive ?? true,
       brand: input.brand?.trim() || null,
       featured: input.featured ?? false,
+      thumbnailPublicId: input.thumbnail?.publicId ?? null,
+      thumbnailSecureUrl: input.thumbnail?.secureUrl ?? null,
     });
   } catch {
     throw new HTTPException(409, { message: "Slug or SKU already exists" });
@@ -208,6 +217,10 @@ productRoutes.put("/:id", requireAuth, requireAdmin, zValidator("json", updateSc
       isActive: input.isActive ?? rows[0].isActive,
       brand: input.brand !== undefined ? input.brand.trim() || null : rows[0].brand,
       featured: input.featured ?? rows[0].featured,
+      thumbnailPublicId:
+        input.thumbnail !== undefined ? (input.thumbnail?.publicId ?? null) : rows[0].thumbnailPublicId,
+      thumbnailSecureUrl:
+        input.thumbnail !== undefined ? (input.thumbnail?.secureUrl ?? null) : rows[0].thumbnailSecureUrl,
       updatedAt: new Date().toISOString(),
     })
     .where(eq(products.id, id));
@@ -311,6 +324,46 @@ productRoutes.patch(
   },
 );
 
+/* ---------------- thumbnail (admin, separate from gallery) ---------------- */
+
+/** Set/replace the product thumbnail (card + gallery main fallback). */
+productRoutes.post(
+  "/:id/thumbnail",
+  requireAuth,
+  requireAdmin,
+  zValidator("json", thumbnailSchema),
+  async (c) => {
+    const db = getDb(c.env.DB);
+    const productId = c.req.param("id");
+    const found = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+    if (!found[0]) throw new HTTPException(404, { message: "Product not found" });
+    const input = c.req.valid("json");
+    await db
+      .update(products)
+      .set({
+        thumbnailPublicId: input.publicId,
+        thumbnailSecureUrl: input.secureUrl,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(products.id, productId));
+    // NOTE: replacing leaves the old Cloudinary asset orphaned — delete it
+    // via the Admin API/Dashboard (same policy as gallery images).
+    return c.json({
+      thumbnail: { publicId: input.publicId, secureUrl: input.secureUrl },
+    });
+  },
+);
+
+/** Remove the thumbnail (cards fall back to the first gallery image). */
+productRoutes.delete("/:id/thumbnail", requireAuth, requireAdmin, async (c) => {
+  const db = getDb(c.env.DB);
+  await db
+    .update(products)
+    .set({ thumbnailPublicId: null, thumbnailSecureUrl: null, updatedAt: new Date().toISOString() })
+    .where(eq(products.id, c.req.param("id")));
+  return c.json({ ok: true });
+});
+
 /* ---------------- variants (admin) ---------------- */
 
 productRoutes.post(
@@ -330,6 +383,7 @@ productRoutes.post(
         id,
         productId,
         name: input.name,
+        value: input.value?.trim() || null,
         sku: input.sku,
         priceCents: input.priceCents ?? null,
         stock: input.stock ?? 0,
@@ -367,6 +421,7 @@ productRoutes.put(
       .update(productVariants)
       .set({
         name: input.name ?? rows[0].name,
+        value: input.value !== undefined ? input.value.trim() || null : rows[0].value,
         sku: input.sku ?? rows[0].sku,
         priceCents: input.priceCents !== undefined ? (input.priceCents ?? null) : rows[0].priceCents,
         stock: input.stock ?? rows[0].stock,

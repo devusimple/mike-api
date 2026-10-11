@@ -64,6 +64,9 @@ export const products = sqliteTable(
     /** Denormalized from reviews on every write (avoids N+1 on listings). */
     ratingAvg: real("rating_avg").notNull().default(0),
     ratingCount: integer("rating_count").notNull().default(0),
+    /** Dedicated cover uploaded separately from the gallery. */
+    thumbnailPublicId: text("thumbnail_public_id"),
+    thumbnailSecureUrl: text("thumbnail_secure_url"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -90,7 +93,7 @@ export const productImages = sqliteTable("product_images", {  id: text("id").pri
   position: integer("position").notNull().default(0),
 });
 
-/** Size/color options with own SKU, price, and stock (e.g. "Black / L"). */
+/** Size/color options with own SKU, price, and stock (e.g. name "Size", value "L"). */
 export const productVariants = sqliteTable(
   "product_variants",
   {
@@ -99,6 +102,8 @@ export const productVariants = sqliteTable(
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    /** Option value, e.g. "L" for name "Size". Displayed as value ?? name. */
+    value: text("value"),
     sku: text("sku"),
     /** Null = inherit the product's price. */
     priceCents: integer("price_cents"),

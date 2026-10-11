@@ -5,7 +5,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db/index";
 import { cartItems, carts, productImages, productVariants, products } from "../db/schema";
-import { unitPriceFor } from "../lib/catalog";
+import { unitPriceFor, variantLabel } from "../lib/catalog";
 import { getOptionalUser, requireAuth } from "../middleware/auth";
 
 type Env = { Bindings: CloudflareBindings };
@@ -83,7 +83,7 @@ async function resolveStock(
   if (active.length > 0) {
     if (!variantId) {
       throw new HTTPException(400, {
-        message: `Pick a variant: ${active.map((v) => v.name).join(", ")}`,
+        message: `Pick an option: ${active.map((v) => variantLabel(v)).join(", ")}`,
       });
     }
     const variant = active.find((v) => v.id === variantId);
@@ -121,9 +121,11 @@ async function cartDetail(db: Db, cartId: string, guest: boolean) {
     detailed.push({
       ...item,
       product: p,
-      variant: variant ? { id: variant.id, name: variant.name, priceCents: variant.priceCents } : null,
+      variant: variant
+        ? { id: variant.id, name: variant.name, value: variant.value, priceCents: variant.priceCents }
+        : null,
       unitPriceCents: unit,
-      thumbnail: imgs[0]?.secureUrl ?? null,
+      thumbnail: p.thumbnailSecureUrl ?? imgs[0]?.secureUrl ?? null,
     });
   }
   return { items: detailed, subtotalCents, currency: "BDT", guest };
@@ -174,7 +176,7 @@ cartRoutes.post("/merge", requireAuth, zValidator("json", mergeSchema), async (c
       .limit(1);
     const total = (existing[0]?.qty ?? 0) + line.qty;
     if (availableStock(product, variant) < total) {
-      const label = variant ? `${product.name} (${variant.name})` : product.name;
+      const label = variant ? `${product.name} (${variantLabel(variant)})` : product.name;
       throw new HTTPException(400, {
         message: `Insufficient stock for ${label} (${availableStock(product, variant)} left)`,
       });

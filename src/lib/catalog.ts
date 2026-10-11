@@ -13,6 +13,11 @@ export function unitPriceFor(
   return variant?.priceCents ?? product.priceCents;
 }
 
+/** Display label for a variant: value ("L") wins, else name ("Black / L"). */
+export function variantLabel(variant: { name: string; value?: string | null }): string {
+  return variant.value?.trim() || variant.name;
+}
+
 /** Normalize user tag input ("Cotton, summer ") → ["Cotton", "summer"]. */
 export function cleanTagNames(input: unknown): string[] {
   const list = Array.isArray(input) ? input : [];
