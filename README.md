@@ -20,7 +20,7 @@ Health: `GET /health` · Route index: `GET /api/docs`
 | File | Covers |
 |---|---|
 | `docs/ARCHITECTURE.md` | Stack, decisions, request lifecycle, "add a domain" checklist |
-| `docs/API.md` | Full endpoint reference + cURL smoke test |
+| `docs/API.md` | Full endpoint reference + cURL smoke test (machine-readable: `GET /api/openapi.json`, UI: `GET /docs`) |
 | `docs/AUTH.md` | JWT rotation, client flows, admin promotion |
 | `docs/DATA_MODEL.md` | Tables, relations, checkout invariants |
 | `docs/CLOUDINARY.md` | Signed upload flow + JS snippet, delete caveat |

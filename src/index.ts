@@ -12,6 +12,7 @@ import { adminReviewRoutes, reviewRoutes } from "./routes/reviews";
 import { couponRoutes } from "./routes/coupons";
 import { metaRoutes } from "./routes/meta";
 import { shippingRoutes } from "./routes/shipping";
+import openapi from "./openapi.json";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -58,7 +59,7 @@ app.get("/", (c) =>
   c.json({
     name: "mike e-commerce API",
     version: "1.0.0",
-    docs: "/api/docs",
+    docs: "/docs (Scalar UI) + /api/openapi.json",
     health: "/health",
     routes: [
       "GET /health",
@@ -79,6 +80,26 @@ app.get("/", (c) =>
 
 app.get("/health", (c) => c.json({ ok: true, time: new Date().toISOString() }));
 
+// OpenAPI spec (hand-maintained mirror of the zod schemas — see docs/API.md)
+// + Scalar reference UI. SDK authors start here.
+app.get("/api/openapi.json", (c) => c.json(openapi));
+app.get(
+  "/docs",
+  (c) =>
+    c.html(`<!doctype html>
+<html>
+  <head>
+    <title>Mike API Docs</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+  </head>
+  <body>
+    <script id="api-reference" data-url="/api/openapi.json"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+  </body>
+</html>`),
+);
+
 app.route("/api/auth", authRoutes);
 app.route("/api/categories", categoryRoutes);
 app.route("/api/products", productRoutes);
@@ -95,6 +116,8 @@ app.route("/api/shipping-zones", shippingRoutes);
 app.get("/api/docs", (c) => {
   return c.json({
     version: "1.0.0",
+    openapi: "/api/openapi.json",
+    referenceUI: "/docs",
     auth: "Bearer access token (15m) + rotating refresh token (30d). See docs/AUTH.md.",
     media: "Signed Cloudinary uploads. See docs/CLOUDINARY.md.",
     currency: "BDT, prices in integer cents",

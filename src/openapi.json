@@ -1,0 +1,674 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "version": "1.0.0",
+    "title": "Mike e-commerce API",
+    "description": "Hono + D1 + Cloudinary backend. Currency BDT, prices in integer cents. Auth: 15m Bearer access token + 30d rotating refresh token. Named thirds: Idempotency-Key required on checkout; X-Guest-Token for anonymous carts."
+  },
+  "servers": [
+    { "url": "https://mike.meeet-signaling-server.workers.dev", "description": "Production" },
+    { "url": "http://localhost:8787", "description": "Local (wrangler dev)" }
+  ],
+  "security": [{ "bearerAuth": [] }],
+  "tags": [
+    { "name": "auth" },
+    { "name": "categories" },
+    { "name": "products" },
+    { "name": "reviews" },
+    { "name": "cart" },
+    { "name": "orders" },
+    { "name": "uploads" },
+    { "name": "coupons" },
+    { "name": "shipping" },
+    { "name": "meta" },
+    { "name": "system" }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["system"],
+        "security": [],
+        "summary": "Health check",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "tags": ["system"],
+        "security": [],
+        "summary": "This OpenAPI document",
+        "responses": { "200": { "description": "OpenAPI JSON" } }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Register (5/min/IP)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegisterInput" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthPair" } } } },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Login (10/min/IP)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginInput" } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthPair" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/RateLimited" }
+        }
+      }
+    },
+    "/api/auth/refresh": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Rotate refresh token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RefreshInput" } } }
+        },
+        "responses": {
+          "200": { "description": "New pair", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthPair" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Revoke a refresh token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RefreshInput" } } }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["auth"],
+        "summary": "Current user",
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "user": { "$ref": "#/components/schemas/User" } } } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/auth/request-verification": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Re-send verification email",
+        "responses": { "200": { "description": "OK" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/api/auth/verify-email": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Consume verification token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TokenInput" } } }
+        },
+        "responses": { "200": { "description": "Verified" }, "400": { "$ref": "#/components/responses/BadRequest" } }
+      }
+    },
+    "/api/auth/forgot-password": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Request password reset (always 200)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/EmailInput" } } }
+        },
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/auth/reset-password": {
+      "post": {
+        "tags": ["auth"],
+        "security": [],
+        "summary": "Reset password, logout everywhere",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ResetInput" } } }
+        },
+        "responses": { "200": { "description": "OK" }, "400": { "$ref": "#/components/responses/BadRequest" } }
+      }
+    },
+    "/api/auth/change-password": {
+      "post": {
+        "tags": ["auth"],
+        "summary": "Change password, returns fresh pair",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChangePasswordInput" } } }
+        },
+        "responses": {
+          "200": { "description": "Fresh pair", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthPair" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "tags": ["categories"],
+        "security": [],
+        "summary": "List categories",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["categories"],
+        "summary": "Create category (admin)",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryInput" } } }
+        },
+        "responses": { "201": { "description": "Created" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" } }
+      }
+    },
+    "/api/categories/{idOrSlug}": {
+      "get": {
+        "tags": ["categories"],
+        "security": [],
+        "summary": "Category detail with product count",
+        "parameters": [{ "$ref": "#/components/parameters/IdOrSlug" }],
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/categories/{id}": {
+      "put": {
+        "tags": ["categories"],
+        "summary": "Update category (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryInput" } } } },
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      },
+      "delete": {
+        "tags": ["categories"],
+        "summary": "Delete category (admin, blocked when used)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": { "200": { "description": "OK" }, "400": { "$ref": "#/components/responses/BadRequest" } }
+      }
+    },
+    "/api/products": {
+      "get": {
+        "tags": ["products"],
+        "security": [],
+        "summary": "Search/filter/sort products",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "category", "in": "query", "schema": { "type": "string" }, "description": "Category slug or id" },
+          { "name": "brand", "in": "query", "schema": { "type": "string" } },
+          { "name": "tag", "in": "query", "schema": { "type": "string" }, "description": "Tag slug" },
+          { "name": "featured", "in": "query", "schema": { "type": "string", "enum": ["1"] } },
+          { "name": "minRating", "in": "query", "schema": { "type": "number" } },
+          { "name": "minPrice", "in": "query", "schema": { "type": "number" }, "description": "Taka" },
+          { "name": "maxPrice", "in": "query", "schema": { "type": "number" }, "description": "Taka" },
+          { "name": "sort", "in": "query", "schema": { "type": "string", "enum": ["newest", "price_asc", "price_desc", "rating"], "default": "newest" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } },
+          { "name": "all", "in": "query", "schema": { "type": "string", "enum": ["1"] }, "description": "Include inactive" }
+        ],
+        "responses": { "200": { "description": "Paginated products with images, variants, tags" } }
+      },
+      "post": {
+        "tags": ["products"],
+        "summary": "Create product (admin)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductInput" } } } },
+        "responses": { "201": { "description": "Created" }, "409": { "$ref": "#/components/responses/Conflict" } }
+      }
+    },
+    "/api/products/{slug}": {
+      "get": {
+        "tags": ["products"],
+        "security": [],
+        "summary": "Product detail (slug or id)",
+        "parameters": [{ "name": "slug", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/products/{id}": {
+      "put": {
+        "tags": ["products"],
+        "summary": "Update product (admin, tags replaces all)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductInput" } } } },
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      },
+      "delete": {
+        "tags": ["products"],
+        "summary": "Delete product + children (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/products/{id}/images": {
+      "post": {
+        "tags": ["products"],
+        "summary": "Attach uploaded Cloudinary image (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ImageInput" } } } },
+        "responses": { "201": { "description": "Created" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/products/{id}/images/{imageId}": {
+      "patch": {
+        "tags": ["products"],
+        "summary": "Reorder image, 0 = cover (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "name": "imageId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["position"], "properties": { "position": { "type": "integer", "minimum": 0 } } } } } },
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      },
+      "delete": {
+        "tags": ["products"],
+        "summary": "Remove image record (admin, DB only)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "name": "imageId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/products/{id}/variants": {
+      "post": {
+        "tags": ["products"],
+        "summary": "Create variant (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VariantInput" } } } },
+        "responses": { "201": { "description": "Created" }, "404": { "$ref": "#/components/responses/NotFound" }, "409": { "$ref": "#/components/responses/Conflict" } }
+      }
+    },
+    "/api/products/{id}/variants/{vid}": {
+      "put": {
+        "tags": ["products"],
+        "summary": "Update variant (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "name": "vid", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VariantInput" } } } },
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      },
+      "delete": {
+        "tags": ["products"],
+        "summary": "Delete variant (admin, clears cart lines)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }, { "name": "vid", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/products/{productId}/reviews": {
+      "get": {
+        "tags": ["reviews"],
+        "security": [],
+        "summary": "List reviews",
+        "parameters": [{ "name": "productId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["reviews"],
+        "summary": "Create or update own review",
+        "parameters": [{ "name": "productId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReviewInput" } } } },
+        "responses": { "200": { "description": "Updated" }, "201": { "description": "Created" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/reviews/{id}": {
+      "delete": {
+        "tags": ["reviews"],
+        "summary": "Delete review (owner or admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": { "200": { "description": "OK" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/cart/": {
+      "get": {
+        "tags": ["cart"],
+        "security": [{ "bearerAuth": [] }, {}],
+        "summary": "Cart detail (Bearer or X-Guest-Token)",
+        "parameters": [{ "$ref": "#/components/parameters/GuestToken" }],
+        "responses": { "200": { "description": "Items, subtotal, guest flag" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      },
+      "delete": {
+        "tags": ["cart"],
+        "security": [{ "bearerAuth": [] }, {}],
+        "summary": "Clear cart",
+        "parameters": [{ "$ref": "#/components/parameters/GuestToken" }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/cart/guest": {
+      "post": {
+        "tags": ["cart"],
+        "security": [],
+        "summary": "Issue guest cart token",
+        "responses": { "200": { "description": "Existing" }, "201": { "description": "Created" } }
+      }
+    },
+    "/api/cart/merge": {
+      "post": {
+        "tags": ["cart"],
+        "summary": "Merge guest cart into account",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["guestToken"], "properties": { "guestToken": { "type": "string" } } } } } },
+        "responses": { "200": { "description": "Merged count" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/cart/items": {
+      "post": {
+        "tags": ["cart"],
+        "security": [{ "bearerAuth": [] }, {}],
+        "summary": "Add item (variantId required when product has variants)",
+        "parameters": [{ "$ref": "#/components/parameters/GuestToken" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CartAddInput" } } } },
+        "responses": { "200": { "description": "Quantity increased" }, "201": { "description": "Added" }, "400": { "$ref": "#/components/responses/BadRequest" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/cart/items/{productId}": {
+      "put": {
+        "tags": ["cart"],
+        "security": [{ "bearerAuth": [] }, {}],
+        "summary": "Set quantity (0 removes)",
+        "parameters": [{ "$ref": "#/components/parameters/ProductId" }, { "$ref": "#/components/parameters/GuestToken" }, { "$ref": "#/components/parameters/VariantQuery" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["qty"], "properties": { "qty": { "type": "integer", "minimum": 0, "maximum": 999 } } } } } },
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      },
+      "delete": {
+        "tags": ["cart"],
+        "security": [{ "bearerAuth": [] }, {}],
+        "summary": "Remove item",
+        "parameters": [{ "$ref": "#/components/parameters/ProductId" }, { "$ref": "#/components/parameters/GuestToken" }, { "$ref": "#/components/parameters/VariantQuery" }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/orders/checkout": {
+      "post": {
+        "tags": ["orders"],
+        "summary": "Checkout (Idempotency-Key required)",
+        "parameters": [{ "$ref": "#/components/parameters/IdempotencyKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CheckoutInput" } } } },
+        "responses": { "201": { "description": "Order created" }, "200": { "description": "Replayed idempotent order" }, "400": { "$ref": "#/components/responses/BadRequest" } }
+      }
+    },
+    "/api/orders": {
+      "get": {
+        "tags": ["orders"],
+        "summary": "Own orders, ?all=1 for admin",
+        "parameters": [
+          { "name": "all", "in": "query", "schema": { "type": "string", "enum": ["1"] } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+        ],
+        "responses": { "200": { "description": "OK" }, "403": { "$ref": "#/components/responses/Forbidden" } }
+      }
+    },
+    "/api/orders/{id}": {
+      "get": {
+        "tags": ["orders"],
+        "summary": "Order detail (owner or admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": { "200": { "description": "Order + items" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/orders/{id}/status": {
+      "patch": {
+        "tags": ["orders"],
+        "summary": "Set status (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["pending", "paid", "shipped", "cancelled"] } } } } } },
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
+    "/api/orders/{id}/cancel": {
+      "post": {
+        "tags": ["orders"],
+        "summary": "Cancel pending order, restocks (owner or admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": { "200": { "description": "OK" }, "400": { "$ref": "#/components/responses/BadRequest" }, "403": { "$ref": "#/components/responses/Forbidden" } }
+      }
+    },
+    "/api/uploads/config": {
+      "get": {
+        "tags": ["uploads"],
+        "security": [],
+        "summary": "Public Cloudinary config",
+        "responses": { "200": { "description": "cloudName, apiKey, folder" } }
+      }
+    },
+    "/api/uploads/signature": {
+      "post": {
+        "tags": ["uploads"],
+        "summary": "Sign a direct upload (admin)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "folder": { "type": "string" }, "publicId": { "type": "string" }, "overwrite": { "type": "boolean" } } } } } },
+        "responses": { "200": { "description": "uploadUrl, signature, timestamp" }, "403": { "$ref": "#/components/responses/Forbidden" } }
+      }
+    },
+    "/api/coupons": {
+      "get": {
+        "tags": ["coupons"],
+        "summary": "List coupons (admin)",
+        "responses": { "200": { "description": "OK" }, "403": { "$ref": "#/components/responses/Forbidden" } }
+      },
+      "post": {
+        "tags": ["coupons"],
+        "summary": "Create coupon (admin)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouponInput" } } } },
+        "responses": { "201": { "description": "Created" }, "409": { "$ref": "#/components/responses/Conflict" } }
+      }
+    },
+    "/api/coupons/{code}": {
+      "delete": {
+        "tags": ["coupons"],
+        "summary": "Delete coupon (admin)",
+        "parameters": [{ "name": "code", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/shipping-zones": {
+      "get": {
+        "tags": ["shipping"],
+        "security": [],
+        "summary": "Active zones for checkout",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["shipping"],
+        "summary": "Create zone (admin)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ShippingZoneInput" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/shipping-zones/all": {
+      "get": {
+        "tags": ["shipping"],
+        "summary": "All zones incl. disabled (admin)",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/shipping-zones/{id}": {
+      "put": {
+        "tags": ["shipping"],
+        "summary": "Update zone (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ShippingZoneInput" } } } },
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      },
+      "delete": {
+        "tags": ["shipping"],
+        "summary": "Delete zone (admin)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/meta": {
+      "get": {
+        "tags": ["meta"],
+        "security": [],
+        "summary": "Brands + tags facets",
+        "responses": { "200": { "description": "OK" } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT", "description": "15-minute access token. Admin-only routes additionally require role=admin." }
+    },
+    "parameters": {
+      "Id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "IdOrSlug": { "name": "idOrSlug", "in": "path", "required": true, "schema": { "type": "string" } },
+      "ProductId": { "name": "productId", "in": "path", "required": true, "schema": { "type": "string" } },
+      "GuestToken": { "name": "X-Guest-Token", "in": "header", "schema": { "type": "string" }, "description": "Anonymous cart token from POST /api/cart/guest" },
+      "VariantQuery": { "name": "variantId", "in": "query", "schema": { "type": "string" }, "description": "Disambiguates variant lines" },
+      "IdempotencyKey": { "name": "Idempotency-Key", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } }
+    },
+    "responses": {
+      "BadRequest": { "description": "Bad request", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Unauthorized": { "description": "Missing/invalid auth", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Forbidden": { "description": "Admin only", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "NotFound": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Conflict": { "description": "Already exists", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "RateLimited": { "description": "Too many attempts (Retry-After header)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "schemas": {
+      "Error": { "type": "object", "properties": { "error": { "type": "string" }, "status": { "type": "integer" } } },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "email": { "type": "string" },
+          "name": { "type": "string" },
+          "role": { "type": "string", "enum": ["customer", "admin"] },
+          "emailVerified": { "type": "boolean" }
+        }
+      },
+      "RegisterInput": {
+        "type": "object",
+        "required": ["email", "password", "name"],
+        "properties": {
+          "email": { "type": "string", "format": "email", "maxLength": 255 },
+          "password": { "type": "string", "minLength": 8, "maxLength": 128 },
+          "name": { "type": "string", "minLength": 1, "maxLength": 100 }
+        }
+      },
+      "LoginInput": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": { "email": { "type": "string", "format": "email" }, "password": { "type": "string", "minLength": 1 } }
+      },
+      "RefreshInput": { "type": "object", "required": ["refreshToken"], "properties": { "refreshToken": { "type": "string", "minLength": 1 } } },
+      "EmailInput": { "type": "object", "required": ["email"], "properties": { "email": { "type": "string", "format": "email" } } },
+      "TokenInput": { "type": "object", "required": ["token"], "properties": { "token": { "type": "string", "minLength": 1 } } },
+      "ResetInput": {
+        "type": "object",
+        "required": ["token", "password"],
+        "properties": { "token": { "type": "string", "minLength": 1 }, "password": { "type": "string", "minLength": 8, "maxLength": 128 } }
+      },
+      "ChangePasswordInput": {
+        "type": "object",
+        "required": ["currentPassword", "newPassword"],
+        "properties": { "currentPassword": { "type": "string", "minLength": 1 }, "newPassword": { "type": "string", "minLength": 8, "maxLength": 128 } }
+      },
+      "AuthPair": {
+        "type": "object",
+        "properties": {
+          "user": { "$ref": "#/components/schemas/User" },
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" }
+        }
+      },
+      "CategoryInput": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string", "maxLength": 100 }, "slug": { "type": "string" }, "imageUrl": { "type": "string", "format": "uri" } }
+      },
+      "ProductInput": {
+        "type": "object",
+        "required": ["name", "priceCents"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 200 },
+          "slug": { "type": "string" },
+          "description": { "type": "string", "maxLength": 5000 },
+          "priceCents": { "type": "integer", "minimum": 0 },
+          "comparePriceCents": { "type": "integer", "minimum": 0 },
+          "sku": { "type": "string", "maxLength": 100 },
+          "stock": { "type": "integer", "minimum": 0, "default": 0 },
+          "categoryId": { "type": "string" },
+          "isActive": { "type": "boolean", "default": true },
+          "brand": { "type": "string", "maxLength": 100 },
+          "featured": { "type": "boolean", "default": false },
+          "tags": { "type": "array", "items": { "type": "string" }, "maxItems": 20 }
+        }
+      },
+      "ImageInput": {
+        "type": "object",
+        "required": ["publicId", "secureUrl"],
+        "properties": {
+          "publicId": { "type": "string" },
+          "secureUrl": { "type": "string", "format": "uri" },
+          "width": { "type": "integer" },
+          "height": { "type": "integer" },
+          "position": { "type": "integer", "default": 0 }
+        }
+      },
+      "VariantInput": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 100 },
+          "sku": { "type": "string", "maxLength": 100 },
+          "priceCents": { "type": "integer", "minimum": 0, "nullable": true, "description": "Null = base price" },
+          "stock": { "type": "integer", "minimum": 0, "default": 0 },
+          "isActive": { "type": "boolean", "default": true },
+          "position": { "type": "integer", "default": 0 }
+        }
+      },
+      "ReviewInput": {
+        "type": "object",
+        "required": ["rating"],
+        "properties": { "rating": { "type": "integer", "minimum": 1, "maximum": 5 }, "comment": { "type": "string", "maxLength": 2000 } }
+      },
+      "CartAddInput": {
+        "type": "object",
+        "required": ["productId"],
+        "properties": {
+          "productId": { "type": "string" },
+          "variantId": { "type": "string" },
+          "qty": { "type": "integer", "minimum": 1, "maximum": 999, "default": 1 }
+        }
+      },
+      "CheckoutInput": {
+        "type": "object",
+        "properties": { "couponCode": { "type": "string", "maxLength": 50 }, "shippingZoneId": { "type": "string" } }
+      },
+      "CouponInput": {
+        "type": "object",
+        "required": ["code", "percentOff"],
+        "properties": {
+          "code": { "type": "string", "minLength": 3, "maxLength": 50 },
+          "percentOff": { "type": "integer", "minimum": 1, "maximum": 90 },
+          "expiresAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ShippingZoneInput": {
+        "type": "object",
+        "required": ["name", "chargeCents"],
+        "properties": {
+          "name": { "type": "string", "maxLength": 100 },
+          "chargeCents": { "type": "integer", "minimum": 0 },
+          "freeAboveCents": { "type": "integer", "minimum": 0, "nullable": true },
+          "active": { "type": "boolean", "default": true },
+          "position": { "type": "integer", "default": 0 }
+        }
+      }
+    }
+  }
+}
