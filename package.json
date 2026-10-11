@@ -1,0 +1,28 @@
+{
+  "name": "mike",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "db:generate": "drizzle-kit generate",
+    "db:apply:local": "wrangler d1 migrations apply mike --local",
+    "db:apply:remote": "wrangler d1 migrations apply mike --remote",
+    "db:seed:local": "wrangler d1 execute mike --local --file ./scripts/seed.sql",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.9.1",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "jose": "^6.2.12",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261011.1",
+    "@cloudinary/url-gen": "^1.22.0",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.110.0"
+  }
+}

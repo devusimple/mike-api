@@ -1,0 +1,7 @@
+# Local Worker secrets — NEVER commit the real file.
+# Copy to `.dev.vars` and fill in:
+#   cp .dev.vars.example .dev.vars
+JWT_SECRET=dev-only-change-me-min-32-chars-please
+CLOUDINARY_API_SECRET=your-cloudinary-api-secret
+# CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY live in wrangler.jsonc `vars`
+# so the client can read the public ones. Only the API_SECRET stays here.

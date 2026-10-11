@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mike",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "CLOUDINARY_CLOUD_NAME": "dxat06es",
+    "CLOUDINARY_API_KEY": "424442886499234",
+    "CLOUDINARY_FOLDER": "mike/products"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "mike",
+      "database_id": "745c7f04-3f07-4369-878f-beca82d5ff5b",
+      "migrations_dir": "drizzle"
+    }
+  ]
+}
