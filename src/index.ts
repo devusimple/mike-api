@@ -11,6 +11,7 @@ import { uploadRoutes } from "./routes/uploads";
 import { adminReviewRoutes, reviewRoutes } from "./routes/reviews";
 import { couponRoutes } from "./routes/coupons";
 import { metaRoutes } from "./routes/meta";
+import { shippingRoutes } from "./routes/shipping";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -66,6 +67,7 @@ app.get("/", (c) =>
       "GET /api/products?search=&category=&brand=&tag=&featured=1&minRating=&minPrice=&maxPrice=&sort=newest|price_asc|price_desc|rating&page=&limit=",
       "GET /api/products/:slug (images, variants, tags), POST/PUT/DELETE (admin), variant + image subroutes (admin)",
       "GET /api/meta (brands + tags facets)",
+      "GET /api/shipping-zones (active), CRUD /api/shipping-zones/all + /:id (admin)",
       "GET /api/cart (Bearer or X-Guest-Token), POST /api/cart/guest, POST /api/cart/merge (auth), POST /api/cart/items, PUT/DELETE /api/cart/items/:productId",
       "POST /api/orders/checkout (Idempotency-Key), GET /api/orders, PATCH /api/orders/:id/status (admin)",
       "GET /api/uploads/config, POST /api/uploads/signature (admin)",
@@ -87,6 +89,7 @@ app.route("/api/orders", orderRoutes);
 app.route("/api/uploads", uploadRoutes);
 app.route("/api/coupons", couponRoutes);
 app.route("/api/meta", metaRoutes);
+app.route("/api/shipping-zones", shippingRoutes);
 
 // Minimal machine-readable route index for the future docs site / admin UI.
 app.get("/api/docs", (c) => {

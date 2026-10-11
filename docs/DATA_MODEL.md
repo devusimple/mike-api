@@ -25,7 +25,8 @@ coupons (code PK, percent_off, active, expires_at)
 | `product_images` | `product_id → products ON DELETE CASCADE` | Stores `cloudinary_public_id` + `secure_url` + dims |
 | `carts` / `cart_items` | `user_id` nullable (guest) or `guest_token` (secret uuid), `UNIQUE(cart_id, product_id, variant_id)` | One user cart (created at register) or one guest cart (`POST /cart/guest`); merged on login, quantities summed per (product, variant) |
 | `coupons` | `code PK`, `percent_off`, `active`, `expires_at` | Code uppercased; discount = round(subtotal × pct/100) |
-| `orders` | `status pending\|paid\|shipped\|cancelled`, `idempotency_key UNIQUE` | Totals snapshotted at checkout |
+| `shipping_zones` | `name`, `charge_cents`, `free_above_cents` nullable, `active` | Free when subtotal ≥ threshold; order snapshots charge+name |
+| `orders` | `status pending\|paid\|shipped\|cancelled`, `idempotency_key UNIQUE`, `shipping_cents` + `shipping_zone` snapshot | Totals snapshotted at checkout |
 | `order_items` | `product_name` + `variant_name` snapshots | `product_id`/`variant_id` nullable so history survives deletion |
 | `reviews` | `UNIQUE(product_id, user_id)`, `rating 1-5` | Re-POST updates existing review |
 | `refresh_tokens` | `token_hash UNIQUE`, `expires_at`, `revoked` | sha256 of JWT, never the token |

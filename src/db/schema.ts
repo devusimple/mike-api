@@ -190,6 +190,18 @@ export const coupons = sqliteTable(
   },
 );
 
+/** Delivery zones for COD shipping charges (admin-managed). */
+export const shippingZones = sqliteTable("shipping_zones", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  /** Flat charge in cents. */
+  chargeCents: integer("charge_cents").notNull(),
+  /** Subtotal at/above which shipping is free (null = never free). */
+  freeAboveCents: integer("free_above_cents"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  position: integer("position").notNull().default(0),
+});
+
 export const orders = sqliteTable(
   "orders",
   {
@@ -204,6 +216,8 @@ export const orders = sqliteTable(
       .default("pending"),
     subtotalCents: integer("subtotal_cents").notNull(),
     discountCents: integer("discount_cents").notNull().default(0),
+    shippingCents: integer("shipping_cents").notNull().default(0),
+    shippingZone: text("shipping_zone"),
     totalCents: integer("total_cents").notNull(),
     couponCode: text("coupon_code"),
     /** Client-supplied `Idempotency-Key` header; prevents double checkout. */

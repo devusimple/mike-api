@@ -4,8 +4,9 @@ import { HTTPException } from "hono/http-exception";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db/index";
-import { cartItems, carts, coupons, orderItems, orders, productVariants, products } from "../db/schema";
+import { cartItems, carts, coupons, orderItems, orders, productVariants, products, shippingZones } from "../db/schema";
 import { unitPriceFor } from "../lib/catalog";
+import { sendOrderAlert } from "../lib/notify";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 
 type Env = { Bindings: CloudflareBindings };
@@ -13,6 +14,7 @@ export const orderRoutes = new Hono<Env>();
 
 const checkoutSchema = z.object({
   couponCode: z.string().max(50).optional(),
+  shippingZoneId: z.string().min(1).optional(),
 });
 
 const statusSchema = z.object({
@@ -27,7 +29,7 @@ const statusSchema = z.object({
  */
 orderRoutes.post("/checkout", requireAuth, zValidator("json", checkoutSchema), async (c) => {
   const user = c.get("authUser");
-  const { couponCode } = c.req.valid("json");
+  const { couponCode, shippingZoneId } = c.req.valid("json");
   const idempotencyKey = c.req.header("Idempotency-Key")?.trim();
   if (!idempotencyKey) {
     throw new HTTPException(400, { message: "Idempotency-Key header is required" });
@@ -83,7 +85,21 @@ orderRoutes.post("/checkout", requireAuth, zValidator("json", checkoutSchema), a
     discount = Math.round((subtotal * cp.percentOff) / 100);
     coupon = code;
   }
-  const total = subtotal - discount;
+  // Shipping: validated zone, free above threshold, snapshotted on the order.
+  let shippingCents = 0;
+  let shippingZone: string | undefined;
+  if (shippingZoneId) {
+    const found = await db.select().from(shippingZones).where(eq(shippingZones.id, shippingZoneId)).limit(1);
+    const zone = found[0];
+    if (!zone || !zone.active) {
+      throw new HTTPException(400, { message: "Invalid shipping zone" });
+    }
+    shippingZone = zone.name;
+    shippingCents =
+      zone.freeAboveCents != null && subtotal >= zone.freeAboveCents ? 0 : zone.chargeCents;
+  }
+
+  const total = subtotal - discount + shippingCents;
   const orderId = crypto.randomUUID();
 
   // D1 has no multi-statement transactions via Drizzle; use a batch so the
@@ -95,6 +111,8 @@ orderRoutes.post("/checkout", requireAuth, zValidator("json", checkoutSchema), a
       status: "pending",
       subtotalCents: subtotal,
       discountCents: discount,
+      shippingCents,
+      shippingZone,
       totalCents: total,
       couponCode: coupon,
       idempotencyKey,
@@ -127,6 +145,18 @@ orderRoutes.post("/checkout", requireAuth, zValidator("json", checkoutSchema), a
 
   const created = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   const createdItems = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+  // Owner alert is fire-and-forget (never fails checkout) + no-op unconfigured.
+  c.executionCtx.waitUntil(
+    sendOrderAlert(c.env, {
+      orderId,
+      itemCount: createdItems.reduce((n, i) => n + i.qty, 0),
+      subtotalCents: subtotal,
+      discountCents: discount,
+      shippingCents,
+      shippingZone: shippingZone ?? null,
+      totalCents: total,
+    }),
+  );
   return c.json({ order: created[0], items: createdItems }, 201);
 });
 

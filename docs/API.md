@@ -59,7 +59,7 @@ Checkout still requires login — merge first, then `POST /api/orders/checkout`.
 
 ## Orders (Bearer required)
 
-- `POST /api/orders/checkout` — header **`Idempotency-Key: <uuid>`** required, body `{ couponCode? }` → 201 `{ order, items }`, replay returns `{ ..., replayed: true }`. Validates cart non-empty, stock, coupon; batch-writes order + items + stock decrement + cart clear.
+- `POST /api/orders/checkout` — header **`Idempotency-Key: <uuid>`** required, body `{ couponCode?, shippingZoneId? }` → 201 `{ order, items }`, replay returns `{ ..., replayed: true }`. Validates cart non-empty, stock, coupon, zone; shipping snapshot on order (`shippingCents`, `shippingZone`); batch-writes order + items + stock decrement + cart clear; fires Telegram owner alert (best-effort).
 - `GET /api/orders?page=&limit=` (own); `GET /api/orders?all=1` (admin, all users)
 - `GET /api/orders/:id` (own or admin)
 - `PATCH /api/orders/:id/status` (admin) `{ status: pending|paid|shipped|cancelled }`
@@ -83,6 +83,12 @@ Checkout still requires login — merge first, then `POST /api/orders/checkout`.
 ## Coupons (admin)
 
 - `GET /api/coupons`, `POST /api/coupons { code, percentOff 1-90, expiresAt? }`, `DELETE /api/coupons/:code`
+
+## Shipping zones
+
+- `GET /api/shipping-zones` (public, active only) → checkout dropdown
+- `GET /api/shipping-zones/all`, `POST /api/shipping-zones { name, chargeCents, freeAboveCents?, active?, position? }`, `PUT /:id` (partial), `DELETE /:id` (admin)
+- Orders snapshot `shippingCents` + `shippingZone`, so edits never rewrite history
 
 ## cURL smoke test
 

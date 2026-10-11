@@ -16,4 +16,7 @@ interface CloudflareBindings {
   RESEND_API_KEY?: string;
   /** Verified sender, e.g. "Mike Shop <hello@shop.com>". */
   MAIL_FROM?: string;
+  /** Telegram bot token (secret) + chat id (var) for owner order alerts. */
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
 }

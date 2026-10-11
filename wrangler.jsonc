@@ -9,7 +9,8 @@
     "CLOUDINARY_API_KEY": "424442886499234",
     "CLOUDINARY_FOLDER": "mike/products",
     "ALLOWED_ORIGINS": "https://mike-storefront.vercel.app/",
-    "FRONTEND_URL": "https://mike-storefront.vercel.app"
+    "FRONTEND_URL": "https://mike-storefront.vercel.app",
+    "TELEGRAM_CHAT_ID": ""
   },
   "kv_namespaces": [
     {
