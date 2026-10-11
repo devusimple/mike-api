@@ -30,9 +30,13 @@ export async function signRefreshToken(
   secret: string,
   userId: string,
 ): Promise<string> {
+  // `jti` guarantees uniqueness: without it, two logins in the same second
+  // produce byte-identical JWTs (second-precision `iat`), and the second
+  // insert into refresh_tokens would violate its UNIQUE(token_hash).
   return await new jose.SignJWT({ type: "refresh" })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(userId)
+    .setJti(crypto.randomUUID())
     .setIssuedAt()
     .setExpirationTime(REFRESH_TTL)
     .sign(secretKey(secret));

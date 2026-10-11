@@ -52,6 +52,12 @@ console.log("server up");
 let r = await req("GET", "/health");
 console.log("GET /health ->", r.status, JSON.stringify(r.json));
 
+// CORS: evil origin gets no ACAO header, localhost is echoed.
+const evil = await fetch(`${BASE}/api/products?limit=1`, { headers: { Origin: "https://evil.example" } });
+console.log("CORS evil origin ->", evil.headers.get("access-control-allow-origin") ?? "(blocked)");
+const local = await fetch(`${BASE}/api/products?limit=1`, { headers: { Origin: "http://localhost:3000" } });
+console.log("CORS localhost ->", local.headers.get("access-control-allow-origin") ?? "(blocked)");
+
 r = await req("POST", "/api/auth/register", { email, password, name: "Smoke" });
 console.log("POST register ->", r.status);
 if (r.status === 409) {
@@ -97,8 +103,49 @@ if (!product) {
 r = await req("GET", "/api/products?limit=5");
 console.log("GET products ->", r.status, "total=", r.json.total);
 
-r = await req("POST", "/api/cart/items", { productId: product.id, qty: 2 }, token);
+// Phase A/B: brand + tags + featured, variants, facets, ratings.
+const brand = `Brand${Date.now() % 100000}`;
+r = await req("PUT", `/api/products/${product.id}`, { brand, featured: true, tags: ["cotton", "summer"] }, token);
+console.log("PUT brand/tags/featured ->", r.status, "tags=", r.json.product?.tags?.length);
+const v1 = await req("POST", `/api/products/${product.id}/variants`, { name: "S", stock: 5 }, token);
+const v2 = await req("POST", `/api/products/${product.id}/variants`, { name: "M", priceCents: 130000, stock: 3 }, token);
+console.log("POST variants ->", v1.status, v2.status);
+const variantS = v1.json.variant?.id;
+const variantM = v2.json.variant?.id;
+for (const [label, qs] of [["brand", `brand=${brand}`], ["tag", "tag=summer"], ["featured", "featured=1"]] as const) {
+  const f = await req("GET", `/api/products?${qs}&limit=5`);
+  console.log(`GET products?${qs} ->`, f.status, "total=", f.json.total);
+}
+const meta = await req("GET", "/api/meta");
+console.log("GET meta ->", meta.status, "hasBrand=", meta.json.brands?.includes(brand), "tags=", meta.json.tags?.length);
+const rv = await req("POST", `/api/products/${product.id}/reviews`, { rating: 5, comment: "Great!" }, token);
+console.log("POST review ->", rv.status);
+const det = await req("GET", `/api/products/${product.id}`);
+console.log("rating avg/count ->", det.json.product?.ratingAvg, det.json.product?.ratingCount);
+
+// Guest flow: anonymous cart, then merge into the logged-in user.
+const g = await req("POST", "/api/cart/guest");
+console.log("POST cart/guest ->", g.status);
+const guestToken = g.json.guestToken as string;
+const gaNoVariant = await req("POST", "/api/cart/items", { productId: product.id, qty: 1 }, undefined, {
+  "X-Guest-Token": guestToken,
+});
+console.log("POST cart item w/o variant ->", gaNoVariant.status, "(expect 400)");
+const ga = await req("POST", "/api/cart/items", { productId: product.id, variantId: variantS, qty: 1 }, undefined, {
+  "X-Guest-Token": guestToken,
+});
+console.log("POST cart item (guest) ->", ga.status);
+const gg = await req("GET", "/api/cart", undefined, undefined, { "X-Guest-Token": guestToken });
+console.log("GET cart (guest) ->", gg.status, "subtotal=", gg.json.subtotalCents, "guest=", gg.json.guest);
+const m = await req("POST", "/api/cart/merge", { guestToken }, token);
+console.log("POST cart/merge ->", m.status, JSON.stringify(m.json));
+const gm = await req("GET", "/api/cart", undefined, undefined, { "X-Guest-Token": guestToken });
+console.log("GET guest cart after merge ->", gm.status, "(expect 404)");
+
+r = await req("POST", "/api/cart/items", { productId: product.id, variantId: variantM, qty: 2 }, token);
 console.log("POST cart item ->", r.status);
+const upd = await req("PUT", `/api/cart/items/${product.id}?variantId=${variantM}`, { qty: 1 }, token);
+console.log("PUT cart item qty (variant) ->", upd.status);
 
 r = await req("GET", "/api/cart", undefined, token);
 console.log("GET cart ->", r.status, "subtotal=", r.json.subtotalCents);

@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 /** User roles. `admin` can manage catalog/coupons/orders. */
@@ -52,6 +52,15 @@ export const products = sqliteTable(
     isActive: integer("is_active", { mode: "boolean" })
       .notNull()
       .default(true),
+    /** Brand facet, e.g. "Aarong". */
+    brand: text("brand"),
+    /** Curated flag for homepage shelves. */
+    featured: integer("featured", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    /** Denormalized from reviews on every write (avoids N+1 on listings). */
+    ratingAvg: real("rating_avg").notNull().default(0),
+    ratingCount: integer("rating_count").notNull().default(0),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -67,8 +76,7 @@ export const products = sqliteTable(
   ],
 );
 
-export const productImages = sqliteTable("product_images", {
-  id: text("id").primaryKey(),
+export const productImages = sqliteTable("product_images", {  id: text("id").primaryKey(),
   productId: text("product_id")
     .notNull()
     .references(() => products.id, { onDelete: "cascade" }),
@@ -79,18 +87,75 @@ export const productImages = sqliteTable("product_images", {
   position: integer("position").notNull().default(0),
 });
 
+/** Size/color options with own SKU, price, and stock (e.g. "Black / L"). */
+export const productVariants = sqliteTable(
+  "product_variants",
+  {
+    id: text("id").primaryKey(),
+    productId: text("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    sku: text("sku"),
+    /** Null = inherit the product's price. */
+    priceCents: integer("price_cents"),
+    stock: integer("stock").notNull().default(0),
+    isActive: integer("is_active", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    position: integer("position").notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex("product_variants_sku_unique").on(t.sku),
+    index("product_variants_product_idx").on(t.productId),
+  ],
+);
+
+export const tags = sqliteTable(
+  "tags",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+  },
+  (t) => [
+    uniqueIndex("tags_name_unique").on(t.name),
+    uniqueIndex("tags_slug_unique").on(t.slug),
+  ],
+);
+
+export const productTags = sqliteTable(
+  "product_tags",
+  {
+    productId: text("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (t) => [
+    uniqueIndex("product_tags_unique").on(t.productId, t.tagId),
+    index("product_tags_tag_idx").on(t.tagId),
+  ],
+);
+
 export const carts = sqliteTable(
   "carts",
   {
     id: text("id").primaryKey(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    /** Null for guest carts (identified by `guestToken` instead). */
+    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
+    /** Secret token issued to anonymous shoppers; sent as `X-Guest-Token`. */
+    guestToken: text("guest_token"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
   },
-  (t) => [uniqueIndex("carts_user_unique").on(t.userId)],
+  (t) => [
+    uniqueIndex("carts_user_unique").on(t.userId),
+    uniqueIndex("carts_guest_unique").on(t.guestToken),
+  ],
 );
 
 export const cartItems = sqliteTable(
@@ -103,9 +168,13 @@ export const cartItems = sqliteTable(
     productId: text("product_id")
       .notNull()
       .references(() => products.id, { onDelete: "cascade" }),
+    /** Null = base product. Required by API when the product has variants. */
+    variantId: text("variant_id").references(() => productVariants.id, {
+      onDelete: "cascade",
+    }),
     qty: integer("qty").notNull().default(1),
   },
-  (t) => [uniqueIndex("cart_items_cart_product_unique").on(t.cartId, t.productId)],
+  (t) => [uniqueIndex("cart_items_cart_product_variant_unique").on(t.cartId, t.productId, t.variantId)],
 );
 
 export const coupons = sqliteTable(
@@ -154,6 +223,9 @@ export const orderItems = sqliteTable("order_items", {
     .references(() => orders.id, { onDelete: "cascade" }),
   productId: text("product_id").references(() => products.id),
   productName: text("product_name").notNull(),
+  /** Snapshots; variant rows are never deleted so history stays intact. */
+  variantId: text("variant_id").references(() => productVariants.id),
+  variantName: text("variant_name"),
   qty: integer("qty").notNull(),
   unitPriceCents: integer("unit_price_cents").notNull(),
 });

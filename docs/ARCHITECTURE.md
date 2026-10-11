@@ -16,7 +16,7 @@ browser/app  ──HTTPS──>  Cloudinary (images, direct upload — never pro
 | Auth | Email+password, PBKDF2-SHA256 (WebCrypto) + JWT access (15m) + rotating refresh (30d, sha256-hashed in D1) | No external provider, works on Workers (bcrypt/jose-node don't), rotation allows logout |
 | DB access | Drizzle ORM (`drizzle-orm/d1`) + hand-written SQL migration in `drizzle/` | Type-safe, D1-compatible, migrations auditable |
 | Prices | Integer cents (`price_cents`) | No float rounding bugs |
-| Cart | Auth-required, one row per user | Simple, no guest-merge logic in v1; extension documented in NEXT_STEPS |
+| Cart | Hybrid: guest carts (`X-Guest-Token`) + auth carts, merged on login | No forced signup to fill a cart; checkout still requires login (guest checkout is future work) |
 | Checkout | `POST /api/orders/checkout` with `Idempotency-Key`, D1 `batch()` write set | Safe retries, atomic order+items+stock+cart-clear |
 | Media | Server signs, client uploads direct to Cloudinary | Workers have 10ms–CPU/128MB limits; proxying uploads wastes both |
 | Payments | None in v1 (`pending` orders = COD/manual) | Stripe/SSLCommerz stubbed in NEXT_STEPS |

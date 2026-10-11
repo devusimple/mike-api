@@ -26,20 +26,30 @@ Errors: `{ "error": "<message>", "status": <code> }`.
 
 ## Products
 
-- `GET /api/products?search=&category=<slug|id>&minPrice=<taka>&maxPrice=<taka>&sort=newest|price_asc|price_desc&page=&limit=&all=1` → `{ products: [{...images}], page, limit, total }` (`all=1` includes inactive; normally filtered)
-- `GET /api/products/:slug` (`slug` or `id`) → `{ product: {...images} }`
-- `POST /api/products` (admin) `{ name, slug?, description?, priceCents, comparePriceCents?, sku?, stock?, categoryId?, isActive? }`
-- `PUT /api/products/:id` (admin, partial)
-- `DELETE /api/products/:id` (admin, cascades images)
+- `GET /api/products?search=&category=<slug|id>&brand=&tag=<slug>&featured=1&minRating=&minPrice=<taka>&maxPrice=<taka>&sort=newest|price_asc|price_desc|rating&page=&limit=&all=1` → `{ products: [{...images, variants, tags, ratingAvg, ratingCount}], page, limit, total }` (`all=1` includes inactive + inactive variants)
+- `GET /api/products/:slug` (`slug` or `id`) → `{ product: {...} }`
+- `POST /api/products` (admin) `{ name, slug?, description?, priceCents, comparePriceCents?, sku?, stock?, categoryId?, isActive?, brand?, featured?, tags?: ["cotton"] }`
+- `PUT /api/products/:id` (admin, partial; `tags` replaces all links)
+- `DELETE /api/products/:id` (admin; explicitly cleans images, variants, tag links, reviews, cart lines — D1 doesn't enforce cascades)
+- Variants (admin): `POST /api/products/:id/variants { name, sku?, priceCents? (null = base price), stock?, isActive?, position? }`, `PUT /:id/variants/:vid` (partial), `DELETE /:id/variants/:vid` (removes cart lines; order history kept)
 - `POST /api/products/:id/images` (admin) `{ publicId, secureUrl, width?, height?, position? }` — attach after Cloudinary upload
 - `DELETE /api/products/:id/images/:imageId` (admin) — removes DB row only (see CLOUDINARY.md)
 
-## Cart (Bearer required)
+Rule: when a product has active variants, cart/checkout require `variantId`; variant price overrides base, stock is per-variant.
 
-- `GET /api/cart` → `{ items: [{...product, thumbnail}], subtotalCents, currency }`
-- `POST /api/cart/items` `{ productId, qty }` (checks active + stock)
-- `PUT /api/cart/items/:productId` `{ qty }` (`0` removes)
-- `DELETE /api/cart/items/:productId`, `DELETE /api/cart` (clear)
+## Cart (Bearer **or** `X-Guest-Token` — except merge)
+
+Guest flow (no account needed to fill a cart):
+1. `POST /api/cart/guest` → `{ guestToken, cartId }` (idempotent if you resend `X-Guest-Token`)
+2. Send `X-Guest-Token: <token>` on all cart endpoints below
+3. After login/register: `POST /api/cart/merge` (Bearer) `{ guestToken }` → quantities summed, stock-checked, guest cart deleted
+
+- `GET /api/cart` → `{ items: [{...product, thumbnail}], subtotalCents, currency, guest }`
+- `POST /api/cart/items` `{ productId, variantId?, qty }` (checks active + variant-aware stock)
+- `PUT /api/cart/items/:productId[?variantId=]` `{ qty }` (`0` removes)
+- `DELETE /api/cart/items/:productId[?variantId=]`, `DELETE /api/cart` (clear)
+
+Checkout still requires login — merge first, then `POST /api/orders/checkout`.
 
 ## Orders (Bearer required)
 
@@ -54,10 +64,14 @@ Errors: `{ "error": "<message>", "status": <code> }`.
 - `GET /api/uploads/config` → `{ cloudName, apiKey, folder }`
 - `POST /api/uploads/signature` (admin) `{ folder?, publicId?, overwrite? }` → `{ uploadUrl, cloudName, apiKey, timestamp, folder, signature }`
 
+## Meta
+
+- `GET /api/meta` → `{ brands: [...], tags: [{name, slug}] }` (facets for shop filters)
+
 ## Reviews
 
 - `GET /api/products/:productId/reviews` (public)
-- `POST /api/products/:productId/reviews` (auth) `{ rating 1-5, comment? }` — one per user, second POST updates
+- `POST /api/products/:productId/reviews` (auth) `{ rating 1-5, comment? }` — one per user, second POST updates; product `ratingAvg`/`ratingCount` recomputed on write/delete
 - `DELETE /api/reviews/:id` (owner or admin)
 
 ## Coupons (admin)

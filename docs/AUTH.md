@@ -4,7 +4,7 @@
 
 - Passwords: PBKDF2-SHA256, 100k iterations, 16-byte salt, 32-byte key (`src/lib/password.ts`). WebCrypto-only so it runs on Workers (no bcrypt).
 - Access token: HS256 JWT, 15 min, claims `{ sub, role, type:"access" }` (`src/lib/jwt.ts`).
-- Refresh token: HS256 JWT, 30 days, `{ sub, type:"refresh" }`. Only its **sha256 hash** is stored in `refresh_tokens`.
+- Refresh token: HS256 JWT, 30 days, `{ sub, type:"refresh" }`. Only its **sha256 hash** is stored in `refresh_tokens`. Each token carries a random `jti` so rapid successive logins never collide on the table's unique hash.
 - Rotation: every `/refresh` revokes the old row and inserts a new one. `/logout` revokes.
 - Middleware: `requireAuth` (Bearer → `c.get("authUser")`), `requireAdmin` (403 unless admin).
 

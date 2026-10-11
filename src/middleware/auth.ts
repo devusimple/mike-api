@@ -55,3 +55,29 @@ export const requireAdmin = createMiddleware(async (c, next) => {
   }
   await next();
 });
+
+/**
+ * Optional auth: returns the user when a valid Bearer token is present,
+ * null when absent. An invalid/expired token is still a 401 (we don't
+ * silently downgrade a logged-in user to guest).
+ */
+export async function getOptionalUser(
+  c: { req: { header(name: string): string | undefined }; env: CloudflareBindings },
+): Promise<AuthUser | null> {
+  const header = c.req.header("Authorization");
+  if (!header) return null;
+  if (!header.startsWith("Bearer ")) {
+    throw new HTTPException(401, { message: "Malformed authorization header" });
+  }
+  let claims;
+  try {
+    claims = await verifyAccessToken(c.env.JWT_SECRET, header.slice(7));
+  } catch {
+    throw new HTTPException(401, { message: "Invalid or expired token" });
+  }
+  const db = getDb(c.env.DB);
+  const rows = await db.select().from(users).where(eq(users.id, claims.sub)).limit(1);
+  const user = rows[0];
+  if (!user) throw new HTTPException(401, { message: "User no longer exists" });
+  return { id: user.id, email: user.email, name: user.name, role: user.role as Role };
+}

@@ -12,15 +12,16 @@ Build against: `GET /api/orders?all=1`, `PATCH /api/orders/:id/status`, product/
 
 ## 3. Storefront upgrades
 
-- Guest cart: issue `cart_token` (uuid cookie) + nullable `carts.guest_token`, merge on login.
+- Guest checkout: allow `POST /api/orders/checkout` with `X-Guest-Token` + email capture (orders need nullable `user_id` + `guest_email`); fraud/abuse review before enabling.
 - Search: D1 `LIKE` is fine <10k products; beyond that use Cloudflare Workers Search or Algolia.
 - Wishlist, addresses table, shipping zones, VAT, order tracking timeline.
 - Reviews: photos (reuse Cloudinary flow), helpful votes, admin moderation queue.
 
 ## 4. Hardening before launch
 
-- `cors origin: ["https://your-shop.com"]` in `src/index.ts`.
+- Set `ALLOWED_ORIGINS` in `wrangler.jsonc` to your shop + admin domains (localhost is always allowed for dev).
 - Rate-limit login/refresh (KV or Durable Objects).
+- Known D1 limit: truly-parallel writes (e.g. 5 logins in the same millisecond from different tabs) can hit single-writer contention and 500 once; sequential retries succeed. Double-submits are safe. If this ever matters, add one retry on `SQLITE_BUSY` in the write paths.
 - `DELETE /api/uploads/:publicId` proxy (Admin API destroy) so image delete frees storage.
 - Audit log table (`admin_actions`), Sentry/workers observability, `bun run cf-typegen` in CI.
 - Backups: cron `wrangler d1 export` to R2.

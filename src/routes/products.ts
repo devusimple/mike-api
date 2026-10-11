@@ -1,14 +1,30 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { HTTPException } from "hono/http-exception";
-import { and, desc, eq, gte, like, lte, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, like, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db/index";
-import { categories, productImages, products } from "../db/schema";
+import {
+  cartItems,
+  categories,
+  productImages,
+  productTags,
+  productVariants,
+  products,
+  reviews,
+  tags,
+} from "../db/schema";
 import { slugify } from "../lib/cloudinary";
+import {
+  cleanTagNames,
+  setProductTags,
+  tagsForProducts,
+  variantsForProducts,
+} from "../lib/catalog";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 
 type Env = { Bindings: CloudflareBindings };
+type Db = ReturnType<typeof getDb>;
 export const productRoutes = new Hono<Env>();
 
 const createSchema = z.object({
@@ -21,6 +37,9 @@ const createSchema = z.object({
   stock: z.number().int().min(0).default(0),
   categoryId: z.string().optional(),
   isActive: z.boolean().optional().default(true),
+  brand: z.string().max(100).optional(),
+  featured: z.boolean().optional().default(false),
+  tags: z.array(z.string().max(50)).max(20).optional().default([]),
 });
 const updateSchema = createSchema.partial();
 
@@ -32,10 +51,44 @@ const imageSchema = z.object({
   position: z.number().int().min(0).optional().default(0),
 });
 
+const variantSchema = z.object({
+  name: z.string().min(1).max(100),
+  sku: z.string().max(100).optional(),
+  priceCents: z.number().int().min(0).nullable().optional(),
+  stock: z.number().int().min(0).default(0),
+  isActive: z.boolean().optional().default(true),
+  position: z.number().int().min(0).optional().default(0),
+});
+const variantUpdateSchema = variantSchema.partial();
+
+async function withExtras(
+  db: Db,
+  rows: (typeof products.$inferSelect)[],
+  includeInactiveVariants: boolean,
+) {
+  const ids = rows.map((p) => p.id);
+  if (!ids.length) return [];
+  const [images, variants, tagMap] = await Promise.all([
+    db.select().from(productImages).where(inArray(productImages.productId, ids)),
+    variantsForProducts(db, ids, !includeInactiveVariants),
+    tagsForProducts(db, ids),
+  ]);
+  return rows.map((p) => ({
+    ...p,
+    images: images.filter((i) => i.productId === p.id).sort((a, b) => a.position - b.position),
+    variants: variants.get(p.id) ?? [],
+    tags: tagMap.get(p.id) ?? [],
+  }));
+}
+
 productRoutes.get("/", async (c) => {
   const db = getDb(c.env.DB);
   const q = c.req.query("search")?.trim() ?? "";
   const category = c.req.query("category");
+  const brand = c.req.query("brand")?.trim();
+  const tag = c.req.query("tag")?.trim();
+  const featuredOnly = c.req.query("featured") === "1";
+  const minRating = Number(c.req.query("minRating") ?? "NaN");
   const minPrice = Number(c.req.query("minPrice") ?? "NaN");
   const maxPrice = Number(c.req.query("maxPrice") ?? "NaN");
   const sort = c.req.query("sort") ?? "newest";
@@ -47,10 +100,20 @@ productRoutes.get("/", async (c) => {
   if (!includeInactive) filters.push(eq(products.isActive, true));
   if (q) filters.push(or(like(products.name, `%${q}%`), like(products.description, `%${q}%`))!);
   if (category) {
-    // Allow filtering by category slug or id.
     const cats = await db.select().from(categories);
     const hit = cats.find((x) => x.id === category || x.slug === category);
     filters.push(eq(products.categoryId, hit ? hit.id : "__none__"));
+  }
+  if (brand) filters.push(eq(products.brand, brand));
+  if (featuredOnly) filters.push(eq(products.featured, true));
+  if (!Number.isNaN(minRating)) filters.push(gte(products.ratingAvg, minRating));
+  if (tag) {
+    const found = await db.select().from(tags).where(eq(tags.slug, slugify(tag))).limit(1);
+    if (!found[0]) return c.json({ products: [], page, limit, total: 0 });
+    const links = await db.select().from(productTags).where(eq(productTags.tagId, found[0].id));
+    const ids = links.map((l) => l.productId);
+    if (!ids.length) return c.json({ products: [], page, limit, total: 0 });
+    filters.push(inArray(products.id, ids));
   }
   if (!Number.isNaN(minPrice)) filters.push(gte(products.priceCents, Math.round(minPrice * 100)));
   if (!Number.isNaN(maxPrice)) filters.push(lte(products.priceCents, Math.round(maxPrice * 100)));
@@ -61,7 +124,9 @@ productRoutes.get("/", async (c) => {
       ? products.priceCents
       : sort === "price_desc"
         ? desc(products.priceCents)
-        : desc(products.createdAt);
+        : sort === "rating"
+          ? desc(products.ratingAvg)
+          : desc(products.createdAt);
 
   const rows = await db
     .select()
@@ -76,15 +141,7 @@ productRoutes.get("/", async (c) => {
     .from(products)
     .where(where);
 
-  // Attach first image per product for listing cards (1 extra query total).
-  const images = await db.select().from(productImages);
-  const withImages = rows.map((p) => ({
-    ...p,
-    images: images
-      .filter((i) => i.productId === p.id)
-      .sort((a, b) => a.position - b.position),
-  }));
-  return c.json({ products: withImages, page, limit, total });
+  return c.json({ products: await withExtras(db, rows, includeInactive), page, limit, total });
 });
 
 productRoutes.get("/:slug", async (c) => {
@@ -93,13 +150,8 @@ productRoutes.get("/:slug", async (c) => {
   const all = await db.select().from(products);
   const product = all.find((p) => p.id === key || p.slug === key);
   if (!product) throw new HTTPException(404, { message: "Product not found" });
-  const images = await db
-    .select()
-    .from(productImages)
-    .where(eq(productImages.productId, product.id));
-  return c.json({
-    product: { ...product, images: images.sort((a, b) => a.position - b.position) },
-  });
+  const [full] = await withExtras(db, [product], true);
+  return c.json({ product: full });
 });
 
 productRoutes.post("/", requireAuth, requireAdmin, zValidator("json", createSchema), async (c) => {
@@ -123,12 +175,16 @@ productRoutes.post("/", requireAuth, requireAdmin, zValidator("json", createSche
       stock: input.stock ?? 0,
       categoryId: input.categoryId,
       isActive: input.isActive ?? true,
+      brand: input.brand?.trim() || null,
+      featured: input.featured ?? false,
     });
   } catch {
     throw new HTTPException(409, { message: "Slug or SKU already exists" });
   }
+  await setProductTags(db, id, cleanTagNames(input.tags));
   const rows = await db.select().from(products).where(eq(products.id, id)).limit(1);
-  return c.json({ product: rows[0] }, 201);
+  const [full] = await withExtras(db, rows, true);
+  return c.json({ product: full }, 201);
 });
 
 productRoutes.put("/:id", requireAuth, requireAdmin, zValidator("json", updateSchema), async (c) => {
@@ -149,16 +205,34 @@ productRoutes.put("/:id", requireAuth, requireAdmin, zValidator("json", updateSc
       stock: input.stock ?? rows[0].stock,
       categoryId: input.categoryId ?? rows[0].categoryId,
       isActive: input.isActive ?? rows[0].isActive,
+      brand: input.brand !== undefined ? input.brand.trim() || null : rows[0].brand,
+      featured: input.featured ?? rows[0].featured,
       updatedAt: new Date().toISOString(),
     })
     .where(eq(products.id, id));
+  if (input.tags !== undefined) await setProductTags(db, id, cleanTagNames(input.tags));
   const updated = await db.select().from(products).where(eq(products.id, id)).limit(1);
-  return c.json({ product: updated[0] });
+  const [full] = await withExtras(db, updated, true);
+  return c.json({ product: full });
 });
 
 productRoutes.delete("/:id", requireAuth, requireAdmin, async (c) => {
   const db = getDb(c.env.DB);
-  await db.delete(products).where(eq(products.id, c.req.param("id")));
+  const id = c.req.param("id");
+  // D1 does not enforce FK cascades — clean children explicitly.
+  const variants = await db.select().from(productVariants).where(eq(productVariants.productId, id));
+  const variantIds = variants.map((v) => v.id);
+  await db.batch([
+    ...(variantIds.length
+      ? [db.delete(cartItems).where(inArray(cartItems.variantId, variantIds))]
+      : []),
+    db.delete(cartItems).where(eq(cartItems.productId, id)),
+    db.delete(productImages).where(eq(productImages.productId, id)),
+    db.delete(productVariants).where(eq(productVariants.productId, id)),
+    db.delete(productTags).where(eq(productTags.productId, id)),
+    db.delete(reviews).where(eq(reviews.productId, id)),
+    db.delete(products).where(eq(products.id, id)),
+  ] as any);
   return c.json({ ok: true });
 });
 
@@ -195,5 +269,88 @@ productRoutes.delete("/:id/images/:imageId", requireAuth, requireAdmin, async (c
   await db.delete(productImages).where(eq(productImages.id, c.req.param("imageId")));
   // NOTE: this only removes the DB row. Delete the asset in Cloudinary via
   // the Admin API (server-side) or Dashboard — see docs/CLOUDINARY.md.
+  return c.json({ ok: true });
+});
+
+/* ---------------- variants (admin) ---------------- */
+
+productRoutes.post(
+  "/:id/variants",
+  requireAuth,
+  requireAdmin,
+  zValidator("json", variantSchema),
+  async (c) => {
+    const db = getDb(c.env.DB);
+    const productId = c.req.param("id");
+    const found = await db.select().from(products).where(eq(products.id, productId)).limit(1);
+    if (!found[0]) throw new HTTPException(404, { message: "Product not found" });
+    const input = c.req.valid("json");
+    const id = crypto.randomUUID();
+    try {
+      await db.insert(productVariants).values({
+        id,
+        productId,
+        name: input.name,
+        sku: input.sku,
+        priceCents: input.priceCents ?? null,
+        stock: input.stock ?? 0,
+        isActive: input.isActive ?? true,
+        position: input.position ?? 0,
+      });
+    } catch {
+      throw new HTTPException(409, { message: "Variant SKU already exists" });
+    }
+    const rows = await db.select().from(productVariants).where(eq(productVariants.id, id)).limit(1);
+    return c.json({ variant: rows[0] }, 201);
+  },
+);
+
+productRoutes.put(
+  "/:id/variants/:vid",
+  requireAuth,
+  requireAdmin,
+  zValidator("json", variantUpdateSchema),
+  async (c) => {
+    const db = getDb(c.env.DB);
+    const input = c.req.valid("json");
+    const rows = await db
+      .select()
+      .from(productVariants)
+      .where(
+        and(
+          eq(productVariants.id, c.req.param("vid")),
+          eq(productVariants.productId, c.req.param("id")),
+        ),
+      )
+      .limit(1);
+    if (!rows[0]) throw new HTTPException(404, { message: "Variant not found" });
+    await db
+      .update(productVariants)
+      .set({
+        name: input.name ?? rows[0].name,
+        sku: input.sku ?? rows[0].sku,
+        priceCents: input.priceCents !== undefined ? (input.priceCents ?? null) : rows[0].priceCents,
+        stock: input.stock ?? rows[0].stock,
+        isActive: input.isActive ?? rows[0].isActive,
+        position: input.position ?? rows[0].position,
+      })
+      .where(eq(productVariants.id, rows[0].id));
+    const updated = await db
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.id, rows[0].id))
+      .limit(1);
+    return c.json({ variant: updated[0] });
+  },
+);
+
+productRoutes.delete("/:id/variants/:vid", requireAuth, requireAdmin, async (c) => {
+  const db = getDb(c.env.DB);
+  const vid = c.req.param("vid");
+  // Remove dangling cart lines; order history keeps variantId + variantName.
+  await db.batch([
+    db.delete(cartItems).where(eq(cartItems.variantId, vid)),
+    db.delete(productVariants).where(eq(productVariants.id, vid)),
+  ] as any);
   return c.json({ ok: true });
 });

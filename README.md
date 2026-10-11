@@ -30,10 +30,12 @@ Health: `GET /health` · Route index: `GET /api/docs`
 ## Key choices
 
 - **Auth:** PBKDF2 + access (15m) / rotating refresh (30d). First admin via SQL (`scripts/make-admin.sql`).
-- **Cart:** auth-required in v1 (guest-cart design in NEXT_STEPS).
+- **Cart:** guest (`X-Guest-Token`, merge on login) or auth; checkout requires login.
+- **Browser access:** CORS allowlist via `ALLOWED_ORIGINS` var (localhost always allowed).
 - **Checkout:** `POST /api/orders/checkout` requires `Idempotency-Key`; D1 `batch()` makes order+items+stock+cart-clear atomic.
 - **Media:** `POST /api/uploads/signature` (admin) → browser uploads direct to Cloudinary → `POST /api/products/:id/images`.
 - **Prices:** integer cents, currency BDT.
+- **Catalog:** brand, featured, tags, rating aggregates; variants (size/color) with own SKU/price/stock — required at cart when present.
 
 ## Scripts
 

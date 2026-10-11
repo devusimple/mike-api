@@ -7,4 +7,6 @@ interface CloudflareBindings {
   CLOUDINARY_API_KEY: string;
   CLOUDINARY_API_SECRET: string;
   CLOUDINARY_FOLDER?: string;
+  /** Comma-separated browser origins, e.g. "https://shop.com,https://admin.shop.com". */
+  ALLOWED_ORIGINS?: string;
 }

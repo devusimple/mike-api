@@ -4,7 +4,8 @@ import { HTTPException } from "hono/http-exception";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db/index";
-import { cartItems, carts, coupons, orderItems, orders, products } from "../db/schema";
+import { cartItems, carts, coupons, orderItems, orders, productVariants, products } from "../db/schema";
+import { unitPriceFor } from "../lib/catalog";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 
 type Env = { Bindings: CloudflareBindings };
@@ -45,18 +46,29 @@ orderRoutes.post("/checkout", requireAuth, zValidator("json", checkoutSchema), a
   const lines = await db.select().from(cartItems).where(eq(cartItems.cartId, cartRows[0].id));
   if (!lines.length) throw new HTTPException(400, { message: "Cart is empty" });
 
-  // Validate stock + snapshot prices.
+  // Validate stock + snapshot prices (variant-aware).
   let subtotal = 0;
   const snapshots = [];
   for (const line of lines) {
     const prow = await db.select().from(products).where(eq(products.id, line.productId)).limit(1);
     const p = prow[0];
     if (!p || !p.isActive) throw new HTTPException(400, { message: `Product unavailable: ${line.productId}` });
-    if (p.stock < line.qty) {
-      throw new HTTPException(400, { message: `Insufficient stock for ${p.name} (${p.stock} left)` });
+    let variant = null;
+    if (line.variantId) {
+      const vrows = await db.select().from(productVariants).where(eq(productVariants.id, line.variantId)).limit(1);
+      variant = vrows[0] ?? null;
+      if (!variant || !variant.isActive) {
+        throw new HTTPException(400, { message: `Variant unavailable: ${p.name}` });
+      }
     }
-    subtotal += p.priceCents * line.qty;
-    snapshots.push({ product: p, qty: line.qty });
+    const stock = variant ? variant.stock : p.stock;
+    if (stock < line.qty) {
+      const label = variant ? `${p.name} (${variant.name})` : p.name;
+      throw new HTTPException(400, { message: `Insufficient stock for ${label} (${stock} left)` });
+    }
+    const unit = unitPriceFor(p, variant);
+    subtotal += unit * line.qty;
+    snapshots.push({ product: p, variant, qty: line.qty, unit });
   }
 
   let discount = 0;
@@ -93,18 +105,25 @@ orderRoutes.post("/checkout", requireAuth, zValidator("json", checkoutSchema), a
         orderId,
         productId: s.product.id,
         productName: s.product.name,
+        variantId: s.variant?.id ?? null,
+        variantName: s.variant?.name ?? null,
         qty: s.qty,
-        unitPriceCents: s.product.priceCents,
+        unitPriceCents: s.unit,
       }),
     ),
     ...snapshots.map((s) =>
-      db
-        .update(products)
-        .set({ stock: s.product.stock - s.qty, updatedAt: new Date().toISOString() })
-        .where(eq(products.id, s.product.id)),
+      s.variant
+        ? db
+            .update(productVariants)
+            .set({ stock: s.variant.stock - s.qty })
+            .where(eq(productVariants.id, s.variant.id))
+        : db
+            .update(products)
+            .set({ stock: s.product.stock - s.qty, updatedAt: new Date().toISOString() })
+            .where(eq(products.id, s.product.id)),
     ),
     db.delete(cartItems).where(eq(cartItems.cartId, cartRows[0].id)),
-  ]);
+  ] as any);
 
   const created = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   const createdItems = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
@@ -182,29 +201,25 @@ orderRoutes.post("/:id/cancel", requireAuth, async (c) => {
     throw new HTTPException(400, { message: "Only pending orders can be cancelled" });
   }
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
-  await db.batch([
-    db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, order.id)),
-    ...items
-      .filter((i) => i.productId)
-      .map((i) =>
-        // Restock best-effort: re-read current stock inside batch is not
-        // possible, so increment via SQL expression through raw D1 below.
-        // Fallback handled after batch if product was deleted.
-        db
-          .update(products)
-          .set({ updatedAt: new Date().toISOString() })
-          .where(eq(products.id, i.productId!)),
-      ),
-  ]);
-  // Accurate restock (needs current stock values, done after status change).
+  await db.update(orders).set({ status: "cancelled" }).where(eq(orders.id, order.id));
+  // Restock whatever the order consumed (variant or base stock).
   for (const item of items) {
-    if (!item.productId) continue;
-    const prow = await db.select().from(products).where(eq(products.id, item.productId)).limit(1);
-    if (prow[0]) {
-      await db
-        .update(products)
-        .set({ stock: prow[0].stock + item.qty })
-        .where(eq(products.id, item.productId));
+    if (item.variantId) {
+      const vrows = await db.select().from(productVariants).where(eq(productVariants.id, item.variantId)).limit(1);
+      if (vrows[0]) {
+        await db
+          .update(productVariants)
+          .set({ stock: vrows[0].stock + item.qty })
+          .where(eq(productVariants.id, item.variantId));
+      }
+    } else if (item.productId) {
+      const prow = await db.select().from(products).where(eq(products.id, item.productId)).limit(1);
+      if (prow[0]) {
+        await db
+          .update(products)
+          .set({ stock: prow[0].stock + item.qty })
+          .where(eq(products.id, item.productId));
+      }
     }
   }
   const updated = await db.select().from(orders).where(eq(orders.id, order.id)).limit(1);

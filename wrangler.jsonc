@@ -7,7 +7,8 @@
   "vars": {
     "CLOUDINARY_CLOUD_NAME": "dxat06es",
     "CLOUDINARY_API_KEY": "424442886499234",
-    "CLOUDINARY_FOLDER": "mike/products"
+    "CLOUDINARY_FOLDER": "mike/products",
+    "ALLOWED_ORIGINS": "https://mike-storefront.vercel.app/"
   },
   "d1_databases": [
     {
