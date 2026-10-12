@@ -76,6 +76,11 @@ Checkout still requires login — merge first, then `POST /api/orders/checkout`.
 
 - `GET /api/meta` → `{ brands: [...], tags: [{name, slug}] }` (facets for shop filters)
 
+## Users (admin)
+
+- `GET /api/users?search=&page=&limit=` → `{ users: [{id, email, name, role, emailVerified, disabled, createdAt}], total }` (never password hashes)
+- `PATCH /api/users/:id { role?, disabled? }` — never yourself; `disabled` rejects login/refresh/all authed calls
+
 ## Reviews
 
 - `GET /api/products/:productId/reviews` (public)

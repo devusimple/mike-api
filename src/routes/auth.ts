@@ -174,6 +174,9 @@ authRoutes.post("/login", zValidator("json", loginSchema), async (c) => {
   if (!user || !(await verifyPassword(password, user.passwordHash))) {
     throw new HTTPException(401, { message: "Invalid credentials" });
   }
+  if (user.disabled) {
+    throw new HTTPException(401, { message: "Account disabled" });
+  }
   const { accessToken, refreshToken } = await issuePair(
     c.env.JWT_SECRET,
     user.id,
@@ -233,6 +236,7 @@ authRoutes.post("/refresh", zValidator("json", refreshSchema), async (c) => {
   }
   const userRows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (!userRows[0]) throw new HTTPException(401, { message: "User no longer exists" });
+  if (userRows[0].disabled) throw new HTTPException(401, { message: "Account disabled" });
 
   // Rotate: revoke old, issue new pair.
   await db.update(refreshTokens).set({ revoked: true }).where(eq(refreshTokens.id, row.id));

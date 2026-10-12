@@ -38,6 +38,7 @@ export const requireAuth = createMiddleware<Env>(async (c, next) => {
   const rows = await db.select().from(users).where(eq(users.id, claims.sub)).limit(1);
   const user = rows[0];
   if (!user) throw new HTTPException(401, { message: "User no longer exists" });
+  if (user.disabled) throw new HTTPException(401, { message: "Account disabled" });
   c.set("authUser", {
     id: user.id,
     email: user.email,
@@ -81,5 +82,6 @@ export async function getOptionalUser(
   const rows = await db.select().from(users).where(eq(users.id, claims.sub)).limit(1);
   const user = rows[0];
   if (!user) throw new HTTPException(401, { message: "User no longer exists" });
+  if (user.disabled) throw new HTTPException(401, { message: "Account disabled" });
   return { id: user.id, email: user.email, name: user.name, role: user.role as Role, emailVerified: !!user.emailVerified };
 }

@@ -21,6 +21,7 @@
     { "name": "coupons" },
     { "name": "shipping" },
     { "name": "meta" },
+    { "name": "users" },
     { "name": "system" }
   ],
   "paths": {
@@ -516,6 +517,27 @@
         "summary": "Brands + tags facets",
         "responses": { "200": { "description": "OK" } }
       }
+    },
+    "/api/users": {
+      "get": {
+        "tags": ["users"],
+        "summary": "Paginated users, no password hashes (admin)",
+        "parameters": [
+          { "name": "search", "in": "query", "schema": { "type": "string" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+        ],
+        "responses": { "200": { "description": "OK" }, "403": { "$ref": "#/components/responses/Forbidden" } }
+      }
+    },
+    "/api/users/{id}": {
+      "patch": {
+        "tags": ["users"],
+        "summary": "Set role / disabled (admin, never self)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserUpdate" } } } },
+        "responses": { "200": { "description": "OK" }, "400": { "$ref": "#/components/responses/BadRequest" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
     }
   },
   "components": {
@@ -583,6 +605,13 @@
           "user": { "$ref": "#/components/schemas/User" },
           "accessToken": { "type": "string" },
           "refreshToken": { "type": "string" }
+        }
+      },
+      "UserUpdate": {
+        "type": "object",
+        "properties": {
+          "role": { "type": "string", "enum": ["customer", "admin"] },
+          "disabled": { "type": "boolean" }
         }
       },
       "CategoryInput": {

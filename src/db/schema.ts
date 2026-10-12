@@ -15,6 +15,8 @@ export const users = sqliteTable(
     emailVerified: integer("email_verified", { mode: "boolean" })
       .notNull()
       .default(false),
+    /** Disabled accounts fail auth everywhere (safer than delete with history). */
+    disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
