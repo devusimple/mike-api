@@ -4,7 +4,7 @@ import { HTTPException } from "hono/http-exception";
 import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "../db/index";
-import { cartItems, carts, coupons, orderItems, orders, productVariants, products, shippingZones } from "../db/schema";
+import { cartItems, carts, coupons, orderEvents, orderItems, orders, productVariants, products, shippingZones } from "../db/schema";
 import { unitPriceFor, variantLabel } from "../lib/catalog";
 import { sendOrderAlert } from "../lib/notify";
 import { requireAdmin, requireAuth } from "../middleware/auth";
@@ -18,8 +18,30 @@ const checkoutSchema = z.object({
 });
 
 const statusSchema = z.object({
-  status: z.enum(["pending", "paid", "shipped", "cancelled"]),
+  status: z.enum(["pending", "paid", "shipped", "delivered", "cancelled"]),
+  carrier: z.string().max(100).optional(),
+  trackingNumber: z.string().max(100).optional(),
+  note: z.string().max(500).optional(),
 });
+
+/** Append a timeline event. */
+async function recordEvent(
+  db: ReturnType<typeof getDb>,
+  orderId: string,
+  from: string | null,
+  to: string,
+  note: string | null | undefined,
+  createdBy: string | null,
+) {
+  await db.insert(orderEvents).values({
+    id: crypto.randomUUID(),
+    orderId,
+    fromStatus: from,
+    toStatus: to,
+    note: note || null,
+    createdBy,
+  });
+}
 
 /**
  * POST /api/orders/checkout
@@ -145,6 +167,7 @@ orderRoutes.post("/checkout", requireAuth, zValidator("json", checkoutSchema), a
 
   const created = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
   const createdItems = await db.select().from(orderItems).where(eq(orderItems.orderId, orderId));
+  await recordEvent(db, orderId, null, "pending", null, user.id);
   // Owner alert is fire-and-forget (never fails checkout) + no-op unconfigured.
   c.executionCtx.waitUntil(
     sendOrderAlert(c.env, {
@@ -199,7 +222,9 @@ orderRoutes.get("/:id", requireAuth, async (c) => {
     throw new HTTPException(403, { message: "Forbidden" });
   }
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
-  return c.json({ order, items });
+  const events = await db.select().from(orderEvents).where(eq(orderEvents.orderId, order.id));
+  events.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  return c.json({ order, items, events });
 });
 
 orderRoutes.patch(
@@ -208,11 +233,23 @@ orderRoutes.patch(
   requireAdmin,
   zValidator("json", statusSchema),
   async (c) => {
+    const admin = c.get("authUser");
     const db = getDb(c.env.DB);
-    const { status } = c.req.valid("json");
+    const { status, carrier, trackingNumber, note } = c.req.valid("json");
     const rows = await db.select().from(orders).where(eq(orders.id, c.req.param("id"))).limit(1);
     if (!rows[0]) throw new HTTPException(404, { message: "Order not found" });
-    await db.update(orders).set({ status }).where(eq(orders.id, rows[0].id));
+    await db
+      .update(orders)
+      .set({
+        status,
+        carrier: carrier !== undefined ? carrier.trim() || null : rows[0].carrier,
+        trackingNumber:
+          trackingNumber !== undefined ? trackingNumber.trim() || null : rows[0].trackingNumber,
+      })
+      .where(eq(orders.id, rows[0].id));
+    if (status !== rows[0].status) {
+      await recordEvent(db, rows[0].id, rows[0].status, status, note, admin.id);
+    }
     const updated = await db.select().from(orders).where(eq(orders.id, rows[0].id)).limit(1);
     return c.json({ order: updated[0] });
   },
@@ -253,5 +290,6 @@ orderRoutes.post("/:id/cancel", requireAuth, async (c) => {
     }
   }
   const updated = await db.select().from(orders).where(eq(orders.id, order.id)).limit(1);
+  await recordEvent(db, order.id, "pending", "cancelled", null, user.id);
   return c.json({ order: updated[0] });
 });

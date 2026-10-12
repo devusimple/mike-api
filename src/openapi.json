@@ -472,17 +472,17 @@
     "/api/orders/{id}": {
       "get": {
         "tags": ["orders"],
-        "summary": "Order detail (owner or admin)",
+        "summary": "Order detail with items + tracking timeline (owner or admin)",
         "parameters": [{ "$ref": "#/components/parameters/Id" }],
-        "responses": { "200": { "description": "Order + items" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" } }
+        "responses": { "200": { "description": "Order + items + events" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" } }
       }
     },
     "/api/orders/{id}/status": {
       "patch": {
         "tags": ["orders"],
-        "summary": "Set status (admin)",
+        "summary": "Set status + courier info (admin)",
         "parameters": [{ "$ref": "#/components/parameters/Id" }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["pending", "paid", "shipped", "cancelled"] } } } } } },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["status"], "properties": { "status": { "type": "string", "enum": ["pending", "paid", "shipped", "delivered", "cancelled"] }, "carrier": { "type": "string" }, "trackingNumber": { "type": "string" }, "note": { "type": "string" } } } } } },
         "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
       }
     },

@@ -27,7 +27,8 @@ coupons (code PK, percent_off, active, expires_at)
 | `carts` / `cart_items` | `user_id` nullable (guest) or `guest_token` (secret uuid), `UNIQUE(cart_id, product_id, variant_id)` | One user cart (created at register) or one guest cart (`POST /cart/guest`); merged on login, quantities summed per (product, variant) |
 | `coupons` | `code PK`, `percent_off`, `active`, `expires_at` | Code uppercased; discount = round(subtotal × pct/100) |
 | `shipping_zones` | `name`, `charge_cents`, `free_above_cents` nullable, `active` | Free when subtotal ≥ threshold; order snapshots charge+name |
-| `orders` | `status pending\|paid\|shipped\|cancelled`, `idempotency_key UNIQUE`, `shipping_cents` + `shipping_zone` snapshot | Totals snapshotted at checkout |
+| `orders` | `status pending\|paid\|shipped\|delivered\|cancelled`, `idempotency_key UNIQUE`, `shipping_cents` + `shipping_zone` snapshot, `carrier` + `tracking_number` | Totals snapshotted at checkout |
+| `order_events` | `order_id FK`, `from→to`, `note`, `created_by` | Timeline written on placed / status change / cancel |
 | `order_items` | `product_name` + `variant_name` snapshots | `product_id`/`variant_id` nullable so history survives deletion |
 | `reviews` | `UNIQUE(product_id, user_id)`, `rating 1-5` | Re-POST updates existing review |
 | `refresh_tokens` | `token_hash UNIQUE`, `expires_at`, `revoked` | sha256 of JWT, never the token |

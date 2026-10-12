@@ -64,8 +64,9 @@ Checkout still requires login — merge first, then `POST /api/orders/checkout`.
 - `POST /api/orders/checkout` — header **`Idempotency-Key: <uuid>`** required, body `{ couponCode?, shippingZoneId? }` → 201 `{ order, items }`, replay returns `{ ..., replayed: true }`. Validates cart non-empty, stock, coupon, zone; shipping snapshot on order (`shippingCents`, `shippingZone`); batch-writes order + items + stock decrement + cart clear; fires Telegram owner alert (best-effort).
 - `GET /api/orders?page=&limit=` (own); `GET /api/orders?all=1` (admin, all users)
 - `GET /api/orders/:id` (own or admin)
-- `PATCH /api/orders/:id/status` (admin) `{ status: pending|paid|shipped|cancelled }`
-- `POST /api/orders/:id/cancel` (own pending, or admin) — restocks
+- `PATCH /api/orders/:id/status` (admin) `{ status: pending|paid|shipped|delivered|cancelled, carrier?, trackingNumber?, note? }` — records a timeline event
+- `POST /api/orders/:id/cancel` (own pending, or admin) — restocks + records event
+- `GET /api/orders/:id` returns `{ order, items, events }` (chronological timeline)
 
 ## Uploads
 

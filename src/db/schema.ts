@@ -244,7 +244,7 @@ export const orders = sqliteTable(
       .notNull()
       .references(() => users.id),
     status: text("status", {
-      enum: ["pending", "paid", "shipped", "cancelled"],
+      enum: ["pending", "paid", "shipped", "delivered", "cancelled"],
     })
       .notNull()
       .default("pending"),
@@ -252,6 +252,9 @@ export const orders = sqliteTable(
     discountCents: integer("discount_cents").notNull().default(0),
     shippingCents: integer("shipping_cents").notNull().default(0),
     shippingZone: text("shipping_zone"),
+    /** Courier + tracking ref shown on the customer timeline. */
+    carrier: text("carrier"),
+    trackingNumber: text("tracking_number"),
     totalCents: integer("total_cents").notNull(),
     couponCode: text("coupon_code"),
     /** Client-supplied `Idempotency-Key` header; prevents double checkout. */
@@ -267,8 +270,7 @@ export const orders = sqliteTable(
   ],
 );
 
-export const orderItems = sqliteTable("order_items", {
-  id: text("id").primaryKey(),
+export const orderItems = sqliteTable("order_items", {  id: text("id").primaryKey(),
   orderId: text("order_id")
     .notNull()
     .references(() => orders.id, { onDelete: "cascade" }),
@@ -280,6 +282,25 @@ export const orderItems = sqliteTable("order_items", {
   qty: integer("qty").notNull(),
   unitPriceCents: integer("unit_price_cents").notNull(),
 });
+
+/** Status timeline for tracking (every transition is recorded). */
+export const orderEvents = sqliteTable(
+  "order_events",
+  {
+    id: text("id").primaryKey(),
+    orderId: text("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status").notNull(),
+    note: text("note"),
+    createdBy: text("created_by").references(() => users.id),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [index("order_events_order_idx").on(t.orderId)],
+);
 
 export const reviews = sqliteTable(
   "reviews",
