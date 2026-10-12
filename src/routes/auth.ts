@@ -39,6 +39,14 @@ const changeSchema = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8).max(128),
 });
+const profileSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  phone: z.string().max(20).optional(),
+});
+const avatarSchema = z.object({
+  publicId: z.string().min(1).max(300),
+  secureUrl: z.url().max(500),
+});
 
 const REFRESH_COOKIE = "refresh_token";
 const REFRESH_MAX_AGE = 30 * 24 * 3600;
@@ -52,6 +60,8 @@ function publicUser(u: typeof users.$inferSelect) {
     name: u.name,
     role: u.role,
     emailVerified: !!u.emailVerified,
+    phone: u.phone,
+    avatarUrl: u.avatarSecureUrl,
   };
 }
 
@@ -271,6 +281,48 @@ authRoutes.post("/logout", zValidator("json", refreshSchema), async (c) => {
 
 authRoutes.get("/me", requireAuth, async (c) => {
   return c.json({ user: c.get("authUser") });
+});
+
+/** Update personal info (name, phone). */
+authRoutes.patch("/profile", requireAuth, zValidator("json", profileSchema), async (c) => {
+  const user = c.get("authUser");
+  const input = c.req.valid("json");
+  const db = getDb(c.env.DB);
+  await db
+    .update(users)
+    .set({
+      name: input.name ?? user.name,
+      phone: input.phone !== undefined ? input.phone.trim() || null : undefined,
+    })
+    .where(eq(users.id, user.id));
+  const rows = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+  return c.json({ user: publicUser(rows[0]) });
+});
+
+/** Set avatar after uploading to Cloudinary (see avatar-signature). */
+authRoutes.put("/avatar", requireAuth, zValidator("json", avatarSchema), async (c) => {
+  const user = c.get("authUser");
+  const input = c.req.valid("json");
+  const db = getDb(c.env.DB);
+  await db
+    .update(users)
+    .set({ avatarPublicId: input.publicId, avatarSecureUrl: input.secureUrl })
+    .where(eq(users.id, user.id));
+  const rows = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+  // NOTE: replacing orphans the old Cloudinary asset — delete it via Dashboard.
+  return c.json({ user: publicUser(rows[0]) });
+});
+
+/** Remove avatar (DB row only). */
+authRoutes.delete("/avatar", requireAuth, async (c) => {
+  const user = c.get("authUser");
+  const db = getDb(c.env.DB);
+  await db
+    .update(users)
+    .set({ avatarPublicId: null, avatarSecureUrl: null })
+    .where(eq(users.id, user.id));
+  const rows = await db.select().from(users).where(eq(users.id, user.id)).limit(1);
+  return c.json({ user: publicUser(rows[0]) });
 });
 
 /** Re-send the verification email (authenticated). */

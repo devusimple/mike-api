@@ -8,11 +8,12 @@ import { productRoutes } from "./routes/products";
 import { cartRoutes } from "./routes/cart";
 import { orderRoutes } from "./routes/orders";
 import { uploadRoutes } from "./routes/uploads";
-import { adminReviewRoutes, reviewRoutes } from "./routes/reviews";
+import { adminReviewRoutes, myReviewRoutes, reviewRoutes } from "./routes/reviews";
 import { couponRoutes } from "./routes/coupons";
 import { metaRoutes } from "./routes/meta";
 import { shippingRoutes } from "./routes/shipping";
 import { userRoutes } from "./routes/users";
+import { addressRoutes } from "./routes/addresses";
 import openapi from "./openapi.json";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
@@ -70,6 +71,7 @@ app.get("/", (c) =>
       "GET /api/products/:slug (images, variants, tags), POST/PUT/DELETE (admin), variant + image subroutes (admin)",
       "GET /api/meta (brands + tags facets)",
       "GET /api/users?search=&page=&limit=, PATCH /api/users/:id (admin; never self)",
+      "PATCH /api/auth/profile, PUT|DELETE /api/auth/avatar, POST /api/uploads/avatar-signature, CRUD /api/addresses, GET /api/reviews/mine",
       "GET /api/shipping-zones (active), CRUD /api/shipping-zones/all + /:id (admin)",
       "GET /api/cart (Bearer or X-Guest-Token), POST /api/cart/guest, POST /api/cart/merge (auth), POST /api/cart/items, PUT/DELETE /api/cart/items/:productId",
       "POST /api/orders/checkout (Idempotency-Key), GET /api/orders, PATCH /api/orders/:id/status (admin)",
@@ -107,6 +109,7 @@ app.route("/api/categories", categoryRoutes);
 app.route("/api/products", productRoutes);
 app.route("/api/products", reviewRoutes); // nested :productId/reviews
 app.route("/api/reviews", adminReviewRoutes);
+app.route("/api/reviews", myReviewRoutes);
 app.route("/api/cart", cartRoutes);
 app.route("/api/orders", orderRoutes);
 app.route("/api/uploads", uploadRoutes);
@@ -114,6 +117,7 @@ app.route("/api/coupons", couponRoutes);
 app.route("/api/meta", metaRoutes);
 app.route("/api/shipping-zones", shippingRoutes);
 app.route("/api/users", userRoutes);
+app.route("/api/addresses", addressRoutes);
 
 // Minimal machine-readable route index for the future docs site / admin UI.
 app.get("/api/docs", (c) => {

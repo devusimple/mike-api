@@ -11,6 +11,8 @@ export interface AuthUser {
   name: string;
   role: Role;
   emailVerified: boolean;
+  phone: string | null;
+  avatarUrl: string | null;
 }
 
 declare module "hono" {
@@ -45,6 +47,8 @@ export const requireAuth = createMiddleware<Env>(async (c, next) => {
     name: user.name,
     role: user.role as Role,
     emailVerified: !!user.emailVerified,
+    phone: user.phone,
+    avatarUrl: user.avatarSecureUrl,
   });
   await next();
 });
@@ -83,5 +87,5 @@ export async function getOptionalUser(
   const user = rows[0];
   if (!user) throw new HTTPException(401, { message: "User no longer exists" });
   if (user.disabled) throw new HTTPException(401, { message: "Account disabled" });
-  return { id: user.id, email: user.email, name: user.name, role: user.role as Role, emailVerified: !!user.emailVerified };
+  return { id: user.id, email: user.email, name: user.name, role: user.role as Role, emailVerified: !!user.emailVerified, phone: user.phone, avatarUrl: user.avatarSecureUrl };
 }

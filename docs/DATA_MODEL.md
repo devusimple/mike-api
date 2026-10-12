@@ -17,7 +17,8 @@ coupons (code PK, percent_off, active, expires_at)
 
 | Table | Key columns | Notes |
 |---|---|---|
-| `users` | `email UNIQUE`, `role customer\|admin`, `email_verified`, `disabled` | Password hash is PBKDF2 string, never raw; disabled accounts fail all auth |
+| `users` | `email UNIQUE`, `role customer\|admin`, `email_verified`, `disabled`, `phone`, avatar cols | Password hash is PBKDF2 string, never raw; disabled accounts fail all auth |
+| `addresses` | `user_id FK`, label/name/phone/lines/city/postal, `is_default` | One default per user (enforced in routes); first address auto-default |
 | `categories` | `name/slug UNIQUE` | Delete blocked while products reference it |
 | `products` | `slug/sku UNIQUE`, `price_cents`, `stock`, `category_id FK`, `is_active`, `brand`, `featured`, `rating_avg/count` (denormalized) | `compare_price_cents` = strikethrough MRP; `stock` used only when the product has no variants |
 | `product_variants` | `product_id FK`, `name` ("Size") + `value` ("L"), `sku UNIQUE`, `price_cents` nullable (= base price), `stock`, `is_active` | Displayed as value ?? name; cart/checkout require a variant when actives exist; deletion removes cart lines, keeps order history |

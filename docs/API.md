@@ -81,6 +81,12 @@ Checkout still requires login — merge first, then `POST /api/orders/checkout`.
 - `GET /api/users?search=&page=&limit=` → `{ users: [{id, email, name, role, emailVerified, disabled, createdAt}], total }` (never password hashes)
 - `PATCH /api/users/:id { role?, disabled? }` — never yourself; `disabled` rejects login/refresh/all authed calls
 
+## Profile (customer)
+
+- `PATCH /api/auth/profile { name?, phone? }`, `PUT /api/auth/avatar { publicId, secureUrl }` (after `POST /api/uploads/avatar-signature` + direct Cloudinary upload), `DELETE /api/auth/avatar`
+- `CRUD /api/addresses` (`label, name, phone, line1, line2?, city, postalCode?, isDefault?`) — owner-only, one default auto-managed
+- `GET /api/reviews/mine` — own reviews with product context
+
 ## Reviews
 
 - `GET /api/products/:productId/reviews` (public)

@@ -24,6 +24,28 @@ uploadRoutes.get("/config", async (c) => {
 });
 
 /**
+ * Sign a customer avatar upload. Fixed folder + constraints (unlike the
+ * admin product signature): any logged-in user, `mike/avatars` only.
+ * Client uploads direct to Cloudinary, then PUT /api/auth/avatar.
+ */
+uploadRoutes.post("/avatar-signature", requireAuth, async (c) => {
+  if (!c.env.CLOUDINARY_API_SECRET) {
+    throw new HTTPException(500, { message: "CLOUDINARY_API_SECRET not configured" });
+  }
+  const timestamp = Math.floor(Date.now() / 1000);
+  const folder = "mike/avatars";
+  const { signature } = await signUpload(c.env.CLOUDINARY_API_SECRET, { timestamp, folder });
+  return c.json({
+    cloudName: c.env.CLOUDINARY_CLOUD_NAME,
+    apiKey: c.env.CLOUDINARY_API_KEY,
+    timestamp,
+    folder,
+    signature,
+    uploadUrl: `https://api.cloudinary.com/v1_1/${c.env.CLOUDINARY_CLOUD_NAME}/image/upload`,
+  });
+});
+
+/**
  * Sign an upload. Admin-only in v1 to prevent abuse (product images).
  * Client then POSTs a multipart form directly to Cloudinary with:
  * file, api_key, timestamp, folder, signature (+ public_id/overwrite if signed).

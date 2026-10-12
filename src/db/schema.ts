@@ -17,6 +17,10 @@ export const users = sqliteTable(
       .default(false),
     /** Disabled accounts fail auth everywhere (safer than delete with history). */
     disabled: integer("disabled", { mode: "boolean" }).notNull().default(false),
+    /** Contact number for COD coordination. */
+    phone: text("phone"),
+    avatarPublicId: text("avatar_public_id"),
+    avatarSecureUrl: text("avatar_secure_url"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -166,6 +170,29 @@ export const carts = sqliteTable(
     uniqueIndex("carts_user_unique").on(t.userId),
     uniqueIndex("carts_guest_unique").on(t.guestToken),
   ],
+);
+
+/** Saved delivery addresses (COD book). One default per user. */
+export const addresses = sqliteTable(
+  "addresses",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    label: text("label").notNull().default("Home"),
+    name: text("name").notNull(),
+    phone: text("phone").notNull(),
+    line1: text("line1").notNull(),
+    line2: text("line2"),
+    city: text("city").notNull(),
+    postalCode: text("postal_code"),
+    isDefault: integer("is_default", { mode: "boolean" }).notNull().default(false),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [index("addresses_user_idx").on(t.userId)],
 );
 
 export const cartItems = sqliteTable(

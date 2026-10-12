@@ -22,6 +22,7 @@
     { "name": "shipping" },
     { "name": "meta" },
     { "name": "users" },
+    { "name": "addresses" },
     { "name": "system" }
   ],
   "paths": {
@@ -108,6 +109,27 @@
           "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "user": { "$ref": "#/components/schemas/User" } } } } } },
           "401": { "$ref": "#/components/responses/Unauthorized" }
         }
+      }
+    },
+    "/api/auth/profile": {
+      "patch": {
+        "tags": ["auth"],
+        "summary": "Update name/phone",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string", "maxLength": 100 }, "phone": { "type": "string", "maxLength": 20 } } } } } },
+        "responses": { "200": { "description": "Updated user" }, "401": { "$ref": "#/components/responses/Unauthorized" } }
+      }
+    },
+    "/api/auth/avatar": {
+      "put": {
+        "tags": ["auth"],
+        "summary": "Set avatar after Cloudinary upload",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["publicId", "secureUrl"], "properties": { "publicId": { "type": "string" }, "secureUrl": { "type": "string", "format": "uri" } } } } } },
+        "responses": { "200": { "description": "Updated user" } }
+      },
+      "delete": {
+        "tags": ["auth"],
+        "summary": "Remove avatar (DB row only)",
+        "responses": { "200": { "description": "OK" } }
       }
     },
     "/api/auth/request-verification": {
@@ -332,6 +354,41 @@
         "responses": { "200": { "description": "OK" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" } }
       }
     },
+    "/api/reviews/mine": {
+      "get": {
+        "tags": ["reviews"],
+        "summary": "Own review history with product context",
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/api/addresses": {
+      "get": {
+        "tags": ["addresses"],
+        "summary": "Own addresses, default first",
+        "responses": { "200": { "description": "OK" } }
+      },
+      "post": {
+        "tags": ["addresses"],
+        "summary": "Add address (first becomes default)",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AddressInput" } } } },
+        "responses": { "201": { "description": "Created" } }
+      }
+    },
+    "/api/addresses/{id}": {
+      "put": {
+        "tags": ["addresses"],
+        "summary": "Update own address",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AddressInput" } } } },
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      },
+      "delete": {
+        "tags": ["addresses"],
+        "summary": "Delete own address (promotes another default)",
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": { "200": { "description": "OK" }, "404": { "$ref": "#/components/responses/NotFound" } }
+      }
+    },
     "/api/cart/": {
       "get": {
         "tags": ["cart"],
@@ -443,6 +500,13 @@
         "security": [],
         "summary": "Public Cloudinary config",
         "responses": { "200": { "description": "cloudName, apiKey, folder" } }
+      }
+    },
+    "/api/uploads/avatar-signature": {
+      "post": {
+        "tags": ["uploads"],
+        "summary": "Sign a customer avatar upload (fixed folder)",
+        "responses": { "200": { "description": "uploadUrl, signature, timestamp" } }
       }
     },
     "/api/uploads/signature": {
@@ -569,7 +633,9 @@
           "email": { "type": "string" },
           "name": { "type": "string" },
           "role": { "type": "string", "enum": ["customer", "admin"] },
-          "emailVerified": { "type": "boolean" }
+          "emailVerified": { "type": "boolean" },
+          "phone": { "type": "string", "nullable": true },
+          "avatarUrl": { "type": "string", "nullable": true }
         }
       },
       "RegisterInput": {
@@ -612,6 +678,20 @@
         "properties": {
           "role": { "type": "string", "enum": ["customer", "admin"] },
           "disabled": { "type": "boolean" }
+        }
+      },
+      "AddressInput": {
+        "type": "object",
+        "required": ["name", "phone", "line1", "city"],
+        "properties": {
+          "label": { "type": "string", "maxLength": 30 },
+          "name": { "type": "string", "maxLength": 100 },
+          "phone": { "type": "string", "maxLength": 20 },
+          "line1": { "type": "string", "maxLength": 300 },
+          "line2": { "type": "string", "maxLength": 300 },
+          "city": { "type": "string", "maxLength": 100 },
+          "postalCode": { "type": "string", "maxLength": 20 },
+          "isDefault": { "type": "boolean" }
         }
       },
       "CategoryInput": {

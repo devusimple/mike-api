@@ -101,3 +101,20 @@ adminReviewRoutes.delete("/:id", requireAuth, requireAdmin, async (c) => {
   await db.delete(reviews).where(eq(reviews.id, c.req.param("id")));
   return c.json({ ok: true });
 });
+
+// Personal history (any logged-in user) — mounted at /api/reviews/mine.
+export const myReviewRoutes = new Hono<Env>();
+myReviewRoutes.get("/mine", requireAuth, async (c) => {
+  const user = c.get("authUser");
+  const db = getDb(c.env.DB);
+  const rows = await db.select().from(reviews).where(eq(reviews.userId, user.id));
+  const out = [];
+  for (const r of rows) {
+    const prow = await db.select().from(products).where(eq(products.id, r.productId)).limit(1);
+    out.push({
+      ...r,
+      product: prow[0] ? { id: prow[0].id, slug: prow[0].slug, name: prow[0].name } : null,
+    });
+  }
+  return c.json({ reviews: out });
+});
